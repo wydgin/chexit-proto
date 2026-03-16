@@ -21,7 +21,8 @@
     "@mui/x-data-grid-pro": "^7.3.6",
     "@mui/x-charts": "^7.3.6",
     "@mui/x-date-pickers": "^7.3.6",
-    "@mui/x-tree-view": "^7.3.6"
+    "@mui/x-tree-view": "^7.3.6",
+    "firebase": "^11.0.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.66",

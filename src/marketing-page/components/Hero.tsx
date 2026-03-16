@@ -1,19 +1,29 @@
 import * as React from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import CircularProgress from '@mui/material/CircularProgress';
 import Container from '@mui/material/Container';
 import Link from '@mui/material/Link';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { storage, db } from '../../firebase';
+
+const UPLOADS_COLLECTION = 'uploads';
+const LATEST_DOC_ID = 'latest';
 
 export default function Hero() {
   const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
+  const [uploading, setUploading] = React.useState(false);
+  const [uploadError, setUploadError] = React.useState<string | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       setSelectedFile(file);
+      setUploadError(null);
     }
   };
 
@@ -21,11 +31,25 @@ export default function Hero() {
     fileInputRef.current?.click();
   };
 
-  const handleUpload = () => {
-    if (selectedFile) {
-      // Handle file upload logic here
-      console.log('Uploading file:', selectedFile.name);
-      // You can add your upload logic here
+  const handleUpload = async () => {
+    if (!selectedFile) return;
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const storageRef = ref(storage, `uploads/${Date.now()}_${selectedFile.name}`);
+      await uploadBytes(storageRef, selectedFile);
+      const downloadURL = await getDownloadURL(storageRef);
+      const latestRef = doc(db, UPLOADS_COLLECTION, LATEST_DOC_ID);
+      await setDoc(latestRef, {
+        downloadURL,
+        fileName: selectedFile.name,
+        uploadedAt: serverTimestamp(),
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Upload failed';
+      setUploadError(message);
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -110,6 +134,7 @@ export default function Hero() {
               size="small"
               onClick={handleBrowseClick}
               fullWidth
+              disabled={uploading}
               sx={{ minWidth: 'fit-content' }}
             >
               {selectedFile ? selectedFile.name : 'Browse file'}
@@ -119,19 +144,25 @@ export default function Hero() {
               color={selectedFile ? "primary" : "inherit"}
               size="small"
               onClick={handleUpload}
-              disabled={!selectedFile}
-              sx={{ 
+              disabled={!selectedFile || uploading}
+              startIcon={uploading ? <CircularProgress size={16} color="inherit" /> : undefined}
+              sx={{
                 minWidth: 'fit-content',
                 ...(!selectedFile && {
                   backgroundColor: 'action.disabledBackground',
                   color: 'action.disabled',
                   borderColor: 'action.disabled',
-                })
+                }),
               }}
             >
-              Upload
+              {uploading ? 'Uploading…' : 'Upload'}
             </Button>
           </Stack>
+          {uploadError && (
+            <Typography variant="body2" color="error" sx={{ textAlign: 'center' }}>
+              {uploadError}
+            </Typography>
+          )}
           <Typography
             variant="caption"
             color="text.secondary"

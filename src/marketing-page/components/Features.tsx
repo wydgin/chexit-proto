@@ -1,3 +1,4 @@
+import * as React from 'react';
 import Container from '@mui/material/Container';
 import Box from '@mui/material/Box';
 import Card from '@mui/material/Card';
@@ -8,16 +9,66 @@ import Stack from '@mui/material/Stack';
 import LinearProgress from '@mui/material/LinearProgress';
 import Chip from '@mui/material/Chip';
 import Divider from '@mui/material/Divider';
+import { doc, onSnapshot, Timestamp } from 'firebase/firestore';
+import { db } from '../../firebase';
 
 // Assets served from /assets at the project root (e.g., public/assets)
 const cxrIn = '/assets/cxrin.png';
 const cxrOut = '/assets/cxrout.png';
+
+function formatUploadedAt(seconds: number | null): string {
+  if (seconds == null) return 'Uploaded • 2 min ago';
+  const d = new Date(seconds * 1000);
+  const now = Date.now();
+  const diffMs = now - d.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return 'Uploaded • just now';
+  if (diffMins === 1) return 'Uploaded • 1 min ago';
+  return `Uploaded • ${diffMins} min ago`;
+}
 
 export default function Features() {
   const pageBg = 'background.default';
   const cardBg = 'background.default';
   const cardBorder = 'divider';
   const mutedText = '#9ca3af';
+
+  const [latestUpload, setLatestUpload] = React.useState<{
+    downloadURL: string;
+    fileName: string;
+    uploadedAt: number | null;
+  } | null>(null);
+
+  React.useEffect(() => {
+    const latestRef = doc(db, 'uploads', 'latest');
+    const unsub = onSnapshot(
+      latestRef,
+      (snap) => {
+        const data = snap.data();
+        if (data?.downloadURL) {
+          const uploadedAt = data.uploadedAt instanceof Timestamp
+            ? data.uploadedAt.seconds
+            : typeof data.uploadedAt?.seconds === 'number'
+              ? data.uploadedAt.seconds
+              : null;
+          setLatestUpload({
+            downloadURL: data.downloadURL,
+            fileName: data.fileName ?? 'image',
+            uploadedAt,
+          });
+        } else {
+          setLatestUpload(null);
+        }
+      },
+      () => setLatestUpload(null),
+    );
+    return () => unsub();
+  }, []);
+
+  const previewSrc = latestUpload?.downloadURL ?? cxrIn;
+  const previewSubheader = latestUpload
+    ? formatUploadedAt(latestUpload.uploadedAt)
+    : 'Uploaded • 2 min ago';
 
   return (
     <Box sx={{ bgcolor: pageBg }}>
@@ -55,7 +106,7 @@ export default function Features() {
           >
             <CardHeader
               title="Input X-Ray"
-              subheader="Uploaded • 2 min ago"
+              subheader={previewSubheader}
               sx={{
                 pb: 1,
                 '& .MuiCardHeader-title': {
@@ -71,7 +122,7 @@ export default function Features() {
             <CardContent sx={{ pt: 1 }}>
               <Box
                 component="img"
-                 src={cxrIn}
+                src={previewSrc}
                 alt="Input chest X-ray"
                 sx={{
                   borderRadius: 2,
