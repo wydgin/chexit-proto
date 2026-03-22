@@ -6,4 +6,6 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
 export PYTHONPATH=.
+# CPU-only servers (Render): TensorFlow otherwise probes CUDA and logs cuInit errors.
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:--1}"
 exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:?}"

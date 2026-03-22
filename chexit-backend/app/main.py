@@ -7,6 +7,9 @@ import sys
 import time
 from contextlib import asynccontextmanager
 
+# Before TensorFlow loads (via chexit_inference): no GPU on Render — avoids cuInit ERROR spam.
+os.environ.setdefault("CUDA_VISIBLE_DEVICES", "-1")
+
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse

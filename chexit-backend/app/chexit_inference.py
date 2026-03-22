@@ -18,6 +18,10 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import cv2
 import numpy as np
+
+# If this module is imported before app.main, still avoid CUDA probe on CPU-only hosts.
+os.environ.setdefault("CUDA_VISIBLE_DEVICES", "-1")
+
 import tensorflow as tf
 from tensorflow.keras import regularizers
 from tensorflow.keras.applications import MobileNetV2
