@@ -4,6 +4,9 @@ Download U-Net artifacts from Google Drive (gdown) when missing under assets/mod
 Drive files must be shared: Anyone with the link → Viewer.
 Override IDs with CHEXIT_GDOWN_UNET_BEST_ID, CHEXIT_GDOWN_UNET_WEIGHTS_ID, CHEXIT_GDOWN_UNET_FINAL_ID.
 Set CHEXIT_SKIP_GDOWN=1 to skip downloads (local dev when weights are already on disk).
+
+By default only ``unet_lung_seg_best.keras`` is downloaded (what /predict uses). Set
+CHEXIT_GDOWN_ALL_UNET=1 to also fetch the weights-only and final Keras files (~310MB extra per cold start).
 """
 
 from __future__ import annotations
@@ -38,26 +41,28 @@ def _assets_models_dir() -> Path:
 
 def _drive_models() -> dict[str, dict[str, str]]:
     """Map logical name → file id and destination filename under assets/models/."""
-    return {
+    models: dict[str, dict[str, str]] = {
         "unet_best": {
             "id": os.environ.get(
                 "CHEXIT_GDOWN_UNET_BEST_ID", "1Lw2yROpyz3-GaYXsrJOdxaEXM7EMnPzQ"
             ).strip(),
             "filename": "unet_lung_seg_best.keras",
         },
-        "unet_weights": {
+    }
+    if os.environ.get("CHEXIT_GDOWN_ALL_UNET", "").strip().lower() in ("1", "true", "yes"):
+        models["unet_weights"] = {
             "id": os.environ.get(
                 "CHEXIT_GDOWN_UNET_WEIGHTS_ID", "1vBhVrAE2dsCtKjZ__Gg-iYQbjlQa06vB"
             ).strip(),
             "filename": "unet_lung_seg_best_weights.weights.h5",
-        },
-        "unet_final": {
+        }
+        models["unet_final"] = {
             "id": os.environ.get(
                 "CHEXIT_GDOWN_UNET_FINAL_ID", "1Cc2BB9yIUIMuBnXx57_UEoDYPBxPEE9P"
             ).strip(),
             "filename": "unet_lung_seg_final.keras",
-        },
-    }
+        }
+    return models
 
 
 def download_models_if_needed() -> None:

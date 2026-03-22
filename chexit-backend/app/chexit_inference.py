@@ -21,8 +21,15 @@ import numpy as np
 
 # If this module is imported before app.main, still avoid CUDA probe on CPU-only hosts.
 os.environ.setdefault("CUDA_VISIBLE_DEVICES", "-1")
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")  # less TF stderr noise on CPU servers
 
 import tensorflow as tf
+
+try:
+    tf.config.set_visible_devices([], "GPU")
+except (ValueError, RuntimeError):
+    pass
+
 from tensorflow.keras import regularizers
 from tensorflow.keras.applications import MobileNetV2
 from tensorflow.keras.layers import Dense, Dropout, GlobalAveragePooling2D
