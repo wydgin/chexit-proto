@@ -13,9 +13,32 @@ export type PredictUiState = {
   data: PredictResponse | null;
 };
 
-function apiBase(): string {
-  const base = import.meta.env.VITE_CHEXIT_API_URL?.trim();
-  return base && base.length > 0 ? base.replace(/\/$/, '') : defaultBase;
+/**
+ * Predict URL:
+ * - Dev + no VITE_CHEXIT_API_URL → `/api/predict` (Vite proxies to 127.0.0.1:8000; works over HTTPS preview).
+ * - VITE_CHEXIT_API_URL set → direct URL (use only if page is http:// or API is https://).
+ * - Production build → must set VITE_CHEXIT_API_URL to your deployed HTTPS API.
+ */
+function predictUrl(): string {
+  const trimmed = import.meta.env.VITE_CHEXIT_API_URL?.trim();
+  if (trimmed) {
+    return `${trimmed.replace(/\/$/, '')}/predict`;
+  }
+  if (import.meta.env.DEV) {
+    return '/api/predict';
+  }
+  return `${defaultBase}/predict`;
+}
+
+function apiLabelForErrors(): string {
+  const trimmed = import.meta.env.VITE_CHEXIT_API_URL?.trim();
+  if (trimmed) {
+    return trimmed.replace(/\/$/, '');
+  }
+  if (import.meta.env.DEV) {
+    return '/api (proxied to http://127.0.0.1:8000)';
+  }
+  return defaultBase;
 }
 
 function parseErrorDetail(body: unknown): string {
@@ -30,20 +53,22 @@ function parseErrorDetail(body: unknown): string {
   return 'Request failed';
 }
 
-function networkErrorHint(base: string): string {
+function networkErrorHint(label: string): string {
   const httpsPage =
     typeof window !== 'undefined' && window.location.protocol === 'https:';
-  const httpApi = base.startsWith('http://');
-  if (httpsPage && httpApi) {
+  const directHttp = (import.meta.env.VITE_CHEXIT_API_URL?.trim() ?? '').startsWith(
+    'http://',
+  );
+  if (httpsPage && directHttp) {
     return (
-      `Cannot call ${base} from an HTTPS site (browser blocks mixed content). ` +
-      `Use an HTTPS API URL in VITE_CHEXIT_API_URL, or test Analyze from local dev (http://localhost:5173).`
+      `Cannot call ${label} from an HTTPS page (mixed content). ` +
+      `Remove VITE_CHEXIT_API_URL from .env so dev uses the Vite /api proxy, or use an https:// API URL, or open the app at http://localhost:5173.`
     );
   }
   return (
-    `Cannot reach ${base}/predict. Start the API (chexit-backend): ./run_dev.sh — then ` +
-    `VITE_CHEXIT_API_URL should be http://127.0.0.1:8000. Open ${base}/docs to verify. ` +
-    `If Analyze worked then failed: avoid uvicorn --reload while running long /predict (saving a file restarts the server and drops the request).`
+    `Cannot reach the API (${label}). Start it: cd chexit-backend && ./run_dev.sh — open http://127.0.0.1:8000/docs. ` +
+    `In dev, leave VITE_CHEXIT_API_URL unset to use /api proxy. ` +
+    `Long /predict + uvicorn --reload can drop requests if files save during inference.`
   );
 }
 
@@ -67,13 +92,14 @@ function isAbortError(e: unknown): boolean {
 }
 
 export async function predictImage(file: File): Promise<PredictResponse> {
-  const base = apiBase();
+  const url = predictUrl();
+  const label = apiLabelForErrors();
   const formData = new FormData();
   formData.append('file', file);
 
   let res: Response;
   try {
-    res = await fetch(`${base}/predict`, {
+    res = await fetch(url, {
       method: 'POST',
       body: formData,
       signal: predictAbortSignal(),
@@ -89,7 +115,7 @@ export async function predictImage(file: File): Promise<PredictResponse> {
       e instanceof TypeError &&
       (e.message === 'Failed to fetch' || e.message.includes('Load failed'));
     if (failedFetch) {
-      throw new Error(networkErrorHint(base));
+      throw new Error(networkErrorHint(label));
     }
     throw e;
   }
