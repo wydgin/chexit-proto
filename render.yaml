@@ -8,9 +8,12 @@
 services:
   - type: web
     name: chexit-api
+    # Run build/start from this folder. If the dashboard Root Directory is already chexit-backend,
+    # using paths like chexit-backend/requirements.txt fails (double folder).
+    rootDir: chexit-backend
     runtime: python
-    buildCommand: pip install -r chexit-backend/requirements.txt
-    startCommand: cd chexit-backend && PYTHONPATH=. uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    buildCommand: pip install -r requirements.txt
+    startCommand: PYTHONPATH=. uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
       - key: CHEXIT_CORS_ORIGINS
