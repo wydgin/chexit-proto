@@ -59,6 +59,20 @@ MOBILENET_FOLD = int(os.environ.get("CHEXIT_MOBILENET_FOLD", "0"))
 UNET_MASK_THRESHOLD = float(os.environ.get("CHEXIT_UNET_THRESHOLD", "0.5"))
 MIN_LUNG_PIXELS = int(os.environ.get("CHEXIT_MIN_LUNG_PIXELS", "200"))
 
+
+def _env_truthy(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in ("1", "true", "yes")
+
+
+def _max_cxr_long_edge() -> int | None:
+    """CHEXIT_MAX_CXR_EDGE=N caps longest image side; unset or 0 = no cap."""
+    raw = os.environ.get("CHEXIT_MAX_CXR_EDGE", "").strip()
+    if not raw:
+        return None
+    v = int(raw)
+    return None if v <= 0 else v
+
+
 CLASS_NAMES = ("TB Negative", "TB Positive")
 
 
@@ -429,20 +443,26 @@ def run_scorecam_with_unet_lung_mask(
         target_class,
     )
 
-    _pipeline_log.info("  Score-CAM (channel-wise masked forwards — often several minutes)…")
-    t_cam = time.perf_counter()
-    _, norm_cam, cam_timings = compute_scorecam(
-        model,
-        x,
-        target_class=target_class,
-        batch_size=batch_size,
-    )
-    _pipeline_log.info(
-        "  Score-CAM done in %.1fs (masked_forwards=%.1fs, total_internal=%.1fs)",
-        time.perf_counter() - t_cam,
-        cam_timings.get("masked_forwards", 0.0),
-        cam_timings.get("total", 0.0),
-    )
+    if _env_truthy("CHEXIT_SKIP_SCORECAM"):
+        _pipeline_log.info(
+            "  Score-CAM skipped (CHEXIT_SKIP_SCORECAM=1); lung-mask visualization for heatmap."
+        )
+        norm_cam = lung_m_224.astype(np.float32)
+    else:
+        _pipeline_log.info("  Score-CAM (channel-wise masked forwards — often several minutes)…")
+        t_cam = time.perf_counter()
+        _, norm_cam, cam_timings = compute_scorecam(
+            model,
+            x,
+            target_class=target_class,
+            batch_size=batch_size,
+        )
+        _pipeline_log.info(
+            "  Score-CAM done in %.1fs (masked_forwards=%.1fs, total_internal=%.1fs)",
+            time.perf_counter() - t_cam,
+            cam_timings.get("masked_forwards", 0.0),
+            cam_timings.get("total", 0.0),
+        )
 
     _pipeline_log.info("  Blending CAM overlay on CXR (alpha=%.2f)…", overlay_alpha)
     _, ovl_bgr = overlay_cam_on_image_masked(
@@ -461,12 +481,34 @@ def overlay_to_png_base64(ovl_bgr: np.ndarray) -> str:
     return base64.b64encode(buf.tobytes()).decode("utf-8")
 
 
+def _maybe_downscale_bgr_max_edge(bgr_uint8: np.ndarray) -> np.ndarray:
+    lim = _max_cxr_long_edge()
+    if lim is None:
+        return bgr_uint8
+    h0, w0 = bgr_uint8.shape[:2]
+    m = max(h0, w0)
+    if m <= lim:
+        return bgr_uint8
+    scale = lim / float(m)
+    nw, nh = int(round(w0 * scale)), int(round(h0 * scale))
+    _pipeline_log.info(
+        "Downscaling CXR %dx%d → %dx%d (CHEXIT_MAX_CXR_EDGE=%d)",
+        w0,
+        h0,
+        nw,
+        nh,
+        lim,
+    )
+    return cv2.resize(bgr_uint8, (nw, nh), interpolation=cv2.INTER_AREA)
+
+
 def predict_chexit_from_bgr(bgr_uint8: np.ndarray) -> Dict[str, Union[str, float]]:
     """
     Full pipeline for API: U-Net mask → MobileNet + Score-CAM overlay.
     ``bgr_uint8``: OpenCV BGR, uint8.
     """
     t_all = time.perf_counter()
+    bgr_uint8 = _maybe_downscale_bgr_max_edge(bgr_uint8)
     h0, w0 = bgr_uint8.shape[:2]
     _pipeline_log.info("=== pipeline start image=%dx%d ===", w0, h0)
 

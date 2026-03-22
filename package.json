@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:integration": "vitest run src/firebase.integration.test.ts",
-    "test:backend": "cd chexit-backend && PYTHONPATH=. python3 -m pytest tests/ -v"
+    "test:backend": "cd chexit-backend && PYTHONPATH=. python3 -m pytest tests/ -v",
+    "dev:api": "bash chexit-backend/run_dev.sh"
   },
   "dependencies": {
     "@emotion/react": "^11.13.0",
