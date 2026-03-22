@@ -42,9 +42,16 @@ function predictUrl(): string {
     return '/api/predict';
   }
   throw new Error(
-    'VITE_CHEXIT_API_URL is not set. On Vercel/static hosting, POST /api/predict is rewritten to index.html and returns 405. ' +
-      'In Vercel → Settings → Environment Variables, set VITE_CHEXIT_API_URL to your FastAPI base URL (https://your-api…), redeploy, ' +
-      'and add that site origin to CHEXIT_CORS_ORIGINS on the API.',
+    [
+      'Your live site cannot reach FastAPI yet.',
+      '',
+      'Why: Vercel only serves static files; POST /api/predict hits index.html → 405. A laptop URL (http://127.0.0.1:8000) is not reachable from the internet.',
+      '',
+      'Fix: (1) Deploy chexit-backend to a public host with HTTPS (see render.yaml in this repo).',
+      '(2) Vercel → Environment Variables → VITE_CHEXIT_API_URL = https://your-api-host.example (base URL only, no /predict).',
+      '(3) On the API host set CHEXIT_CORS_ORIGINS to your Vercel URL, e.g. https://your-app.vercel.app',
+      '(4) Redeploy the frontend so Vite embeds the new variable.',
+    ].join('\n'),
   );
 }
 
