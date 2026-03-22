@@ -12,25 +12,53 @@ import { storage, db } from '../../firebase';
 
 const UPLOADS_COLLECTION = 'uploads';
 const LATEST_DOC_ID = 'latest';
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 type HeroProps = {
   onUploadComplete?: (downloadUrl: string) => void;
+  /** Temporary `blob:` URL for instant preview in the dashboard (no upload required). */
+  onLocalPreviewChange?: (previewUrl: string | null) => void;
 };
 
-export default function Hero({ onUploadComplete }: HeroProps) {
+export default function Hero({ onUploadComplete, onLocalPreviewChange }: HeroProps) {
   const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
+  const [localPreviewUrl, setLocalPreviewUrl] = React.useState<string | null>(null);
   const [uploading, setUploading] = React.useState(false);
   const [uploadError, setUploadError] = React.useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
+  React.useEffect(() => {
+    return () => {
+      if (localPreviewUrl) {
+        URL.revokeObjectURL(localPreviewUrl);
+      }
+    };
+  }, [localPreviewUrl]);
+
+  React.useEffect(() => {
+    onLocalPreviewChange?.(localPreviewUrl);
+  }, [localPreviewUrl, onLocalPreviewChange]);
+
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-      setUploadError(null);
-      setUploadSuccess(false);
+    if (!file) {
+      return;
     }
+    if (!file.type.startsWith('image/')) {
+      setUploadError('Please upload an image file.');
+      setUploadSuccess(false);
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      setUploadError('Max file size is 5MB.');
+      setUploadSuccess(false);
+      return;
+    }
+    setSelectedFile(file);
+    setUploadError(null);
+    setUploadSuccess(false);
+    setLocalPreviewUrl(URL.createObjectURL(file));
   };
 
   const handleBrowseClick = () => {
@@ -54,6 +82,7 @@ export default function Hero({ onUploadComplete }: HeroProps) {
       });
       onUploadComplete?.(downloadURL);
       setUploadSuccess(true);
+      setLocalPreviewUrl(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Upload failed';
       setUploadError(message);

@@ -29,9 +29,11 @@ function formatUploadedAt(seconds: number | null): string {
 type FeaturesProps = {
   /** When set, this URL is shown in the Input X-Ray preview (e.g. right after upload). */
   previewImageUrl?: string | null;
+  /** Local `blob:` URL from file picker — shown immediately before any Firebase upload. */
+  localPreviewUrl?: string | null;
 };
 
-export default function Features({ previewImageUrl }: FeaturesProps) {
+export default function Features({ previewImageUrl, localPreviewUrl }: FeaturesProps) {
   const pageBg = 'background.default';
   const cardBg = 'background.default';
   const cardBorder = 'divider';
@@ -69,14 +71,16 @@ export default function Features({ previewImageUrl }: FeaturesProps) {
     return () => unsub();
   }, []);
 
-  // Only show image when there is an upload; otherwise show black placeholder
-  const previewSrc = previewImageUrl ?? latestUpload?.downloadURL ?? null;
-  const isFromUpload = Boolean(previewImageUrl ?? latestUpload);
-  const previewSubheader = previewImageUrl
-    ? 'Uploaded • just now'
-    : isFromUpload
-      ? formatUploadedAt(latestUpload?.uploadedAt ?? null)
-      : 'No image uploaded';
+  const remotePreviewSrc = previewImageUrl ?? latestUpload?.downloadURL ?? null;
+  const previewSrc = localPreviewUrl ?? remotePreviewSrc;
+  const hasRemoteImage = Boolean(remotePreviewSrc);
+  const previewSubheader = localPreviewUrl && !previewImageUrl
+    ? 'Preview • not uploaded yet'
+    : previewImageUrl
+      ? 'Uploaded • just now'
+      : hasRemoteImage
+        ? formatUploadedAt(latestUpload?.uploadedAt ?? null)
+        : 'No image uploaded';
 
   return (
     <Box sx={{ bgcolor: pageBg }}>
