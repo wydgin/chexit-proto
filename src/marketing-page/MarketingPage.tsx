@@ -42,7 +42,6 @@ export default function MarketingPage(props: { disableCustomTheme?: boolean }) {
         onUploadComplete={setUploadedPreviewUrl}
         onLocalPreviewChange={setLocalPreviewUrl}
         onPredictUiChange={setPredictUi}
-        onHeatmapStorageUrlChange={setHeatmapStorageUrl}
       />
       <div>
         {/* <LogoCollection /> */}
