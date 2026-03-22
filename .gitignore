@@ -27,3 +27,14 @@ dist-ssr
 # Python backend
 chexit-backend/.venv/
 
+# ML weights & checkpoints (GitHub limit 100 MB/file — keep on API server or local disk only)
+*.keras
+*.h5
+*.hdf5
+*.pth
+*.pt
+*.onnx
+*.pb
+*.tflite
+*.safetensors
+
