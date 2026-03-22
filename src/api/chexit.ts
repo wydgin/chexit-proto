@@ -1,5 +1,3 @@
-const defaultBase = 'http://127.0.0.1:8000';
-
 export type PredictResponse = {
   diagnosis: string;
   risk_score: number;
@@ -13,30 +11,18 @@ export type PredictUiState = {
   data: PredictResponse | null;
 };
 
-/** True when the app is served from this machine (dev server or `vite preview`), not a remote deploy. */
-function isLocalhostApp(): boolean {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-  const h = window.location.hostname;
-  return h === 'localhost' || h === '127.0.0.1';
-}
-
 /**
  * Predict URL:
- * - Local app (dev or preview) + no VITE_CHEXIT_API_URL → `/api/predict` (Vite proxy → :8000).
- * - VITE_CHEXIT_API_URL set → that origin (use https on Vercel, etc.).
- * - Remote deploy without VITE → falls back to defaultBase (set env in CI).
+ * - No VITE_CHEXIT_API_URL → always same-origin `/api/predict` (Vite dev + preview proxy → :8000).
+ *   Works for any dev hostname (localhost, 127.0.0.1, Cursor tunnel, etc.).
+ * - VITE_CHEXIT_API_URL set → direct URL (required for Vercel / production API).
  */
 function predictUrl(): string {
   const trimmed = import.meta.env.VITE_CHEXIT_API_URL?.trim();
   if (trimmed) {
     return `${trimmed.replace(/\/$/, '')}/predict`;
   }
-  if (import.meta.env.DEV || isLocalhostApp()) {
-    return '/api/predict';
-  }
-  return `${defaultBase}/predict`;
+  return '/api/predict';
 }
 
 function apiLabelForErrors(): string {
@@ -44,10 +30,7 @@ function apiLabelForErrors(): string {
   if (trimmed) {
     return trimmed.replace(/\/$/, '');
   }
-  if (import.meta.env.DEV || isLocalhostApp()) {
-    return '/api (proxied to http://127.0.0.1:8000)';
-  }
-  return defaultBase;
+  return '/api (Vite → http://127.0.0.1:8000)';
 }
 
 function parseErrorDetail(body: unknown): string {

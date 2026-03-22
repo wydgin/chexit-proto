@@ -16,11 +16,14 @@ export default defineConfig({
     extensions: ['.tsx', '.ts', '.jsx', '.js', '.json'],
   },
   server: {
+    // Allow Cursor / tunnel hostnames that are not "localhost"
+    host: true,
     // Dev + HTTPS preview: same-origin /api → FastAPI (no mixed content)
     proxy: { ...apiProxy },
   },
   preview: {
-    // `npm run preview` sets DEV=false; proxy must exist here too or Analyze hits 127.0.0.1 directly
+    host: true,
+    // `npm run preview` sets DEV=false; proxy must exist here too
     proxy: { ...apiProxy },
   },
   test: {
