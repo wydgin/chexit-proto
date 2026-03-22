@@ -1,4 +1,7 @@
 # Shim: when Render "Root Directory" is `chexit-backend` but Build Command is still
 # `pip install -r chexit-backend/requirements.txt`, pip resolves this file.
 # Prefer fixing the dashboard: Build Command → `pip install -r requirements.txt` (no extra folder).
+#
+# This folder also contains `app` → `../app` so a mistaken Start Command
+# `cd chexit-backend && uvicorn app.main:app` still finds the package.
 -r ../requirements.txt
