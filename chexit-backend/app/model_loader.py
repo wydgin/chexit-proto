@@ -87,10 +87,11 @@ def download_models_if_needed() -> None:
             id=file_id,
             output=str(path),
             quiet=False,
-            fuzzy=True,
         )
         if not path.is_file() or path.stat().st_size < _MIN_BYTES:
             raise RuntimeError(
                 f"gdown failed or file too small for {name} ({path}). "
                 "Check that the Drive file is public (Anyone with the link) and the ID is correct."
+            )
+eck that the Drive file is public (Anyone with the link) and the ID is correct."
             )
