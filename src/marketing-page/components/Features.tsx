@@ -32,12 +32,22 @@ type FeaturesProps = {
   predictUi: PredictUiState;
 };
 
-function contributionBars(riskScore: number) {
-  const r = Math.min(100, Math.max(0, Math.round(riskScore)));
+// function contributionBars(riskScore: number) {
+//   const r = Math.min(100, Math.max(0, Math.round(riskScore)));
+//   return [
+//     { label: 'MobileNet-V2', value: Math.min(100, Math.round(r * 0.88)), barColor: '#6366f1' },
+//     { label: 'ResNet-50', value: Math.min(100, Math.round(r * 1.02)), barColor: '#3b82f6' },
+//     { label: 'DenseNet-121', value: r, barColor: '#22c55e' },
+//   ];
+// }
+
+function contributionBars(_riskScore: number) {
+  // Backend currently runs only MobileNetV2.
+  // Keep other planned models visible but zeroed until backend supports them.
   return [
-    { label: 'MobileNet-V2', value: Math.min(100, Math.round(r * 0.88)), barColor: '#6366f1' },
-    { label: 'ResNet-50', value: Math.min(100, Math.round(r * 1.02)), barColor: '#3b82f6' },
-    { label: 'DenseNet-121', value: r, barColor: '#22c55e' },
+    { label: 'MobileNetV2', value: 100, barColor: '#6366f1' },
+    { label: 'EfficientNetB2', value: 0, barColor: '#f59e0b' },
+    { label: 'DenseNet121', value: 0, barColor: '#22c55e' },
   ];
 }
 
@@ -109,12 +119,18 @@ export default function Features({ previewImageUrl, localPreviewUrl, predictUi }
   const analysisVersionKey = pred
     ? `${diagnosisLine}|${riskPct ?? ''}|${confidenceLine}`
     : 'no-analysis';
-  const modelRows = pred && riskPct != null ? contributionBars(Number(pred.risk_score)) : [
-    { label: 'MobileNet-V2', value: 60, barColor: '#6366f1' },
-    { label: 'ResNet-50', value: 80, barColor: '#3b82f6' },
-    { label: 'DenseNet-121', value: 75, barColor: '#22c55e' },
-  ];
-
+  // const modelRows = pred && riskPct != null ? contributionBars(Number(pred.risk_score)) : [
+  //   { label: 'MobileNet-V2', value: 60, barColor: '#6366f1' },
+  //   { label: 'ResNet-50', value: 80, barColor: '#3b82f6' },
+  //   { label: 'DenseNet-121', value: 75, barColor: '#22c55e' },
+  // ];
+  const modelRows = pred && riskPct != null
+  ? contributionBars(Number(pred.risk_score))
+  : [
+      { label: 'MobileNetV2', value: 100, barColor: '#6366f1' },
+      { label: 'EfficientNetB2', value: 0, barColor: '#f59e0b' },
+      { label: 'DenseNet121', value: 0, barColor: '#22c55e' },
+    ];
   return (
     <Box sx={{ bgcolor: pageBg }}>
       <Container id="features" maxWidth="lg" sx={{ pt: { xs: 4, md: 5 }, pb: { xs: 6, md: 7 } }}>

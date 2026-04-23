@@ -15,7 +15,7 @@ import { storage, db } from '../../firebase';
 
 const UPLOADS_COLLECTION = 'uploads';
 const LATEST_DOC_ID = 'latest';
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
 type HeroProps = {
   /** Latest analyze state (shown in alerts + passed to Features via parent). */
@@ -64,7 +64,7 @@ export default function Hero({
       return;
     }
     if (file.size > MAX_IMAGE_BYTES) {
-      setUploadError('Max file size is 5MB.');
+      setUploadError('Max file size is 10MB.');
       setUploadSuccess(false);
       return;
     }

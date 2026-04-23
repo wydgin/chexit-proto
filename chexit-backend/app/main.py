@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 from app.chexit_inference import predict_chexit_from_pil_rgb
 from app.model_loader import download_models_if_needed
 
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
 def _api_logger() -> logging.Logger:
     log = logging.getLogger("chexit.api")
@@ -102,6 +103,12 @@ async def predict(file: UploadFile = File(...)) -> PredictResponse:
         )
 
     file_bytes = await file.read()
+    if len(file_bytes) > MAX_UPLOAD_BYTES:
+    raise HTTPException(
+        status_code=413,
+        detail="Max file size is 10MB.",
+    )
+    
     _api_log.info(
         "POST /predict filename=%r content_type=%s bytes=%d",
         file.filename,
