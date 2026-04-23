@@ -41,13 +41,33 @@ type FeaturesProps = {
 //   ];
 // }
 
-function contributionBars(_riskScore: number) {
-  // Backend currently runs only MobileNetV2.
-  // Keep other planned models visible but zeroed until backend supports them.
+// function contributionBars(_riskScore: number) {
+//   // Backend currently runs only MobileNetV2.
+//   // Keep other planned models visible but zeroed until backend supports them.
+//   return [
+//     { label: 'MobileNetV2', value: 100, barColor: '#6366f1' },
+//     { label: 'EfficientNetB2', value: 0, barColor: '#f59e0b' },
+//     { label: 'DenseNet121', value: 0, barColor: '#22c55e' },
+//   ];
+// }
+
+function contributionBars(contrib?: {
+  mobilenetv2: number;
+  efficientnetb2: number;
+  densenet121: number;
+}) {
+  if (!contrib) {
+    return [
+      { label: 'MobileNetV2', value: 0, barColor: '#6366f1' },
+      { label: 'EfficientNetB2', value: 0, barColor: '#f59e0b' },
+      { label: 'DenseNet121', value: 0, barColor: '#22c55e' },
+    ];
+  }
+
   return [
-    { label: 'MobileNetV2', value: 100, barColor: '#6366f1' },
-    { label: 'EfficientNetB2', value: 0, barColor: '#f59e0b' },
-    { label: 'DenseNet121', value: 0, barColor: '#22c55e' },
+    { label: 'MobileNetV2', value: Math.round(contrib.mobilenetv2), barColor: '#6366f1' },
+    { label: 'EfficientNetB2', value: Math.round(contrib.efficientnetb2), barColor: '#f59e0b' },
+    { label: 'DenseNet121', value: Math.round(contrib.densenet121), barColor: '#22c55e' },
   ];
 }
 
@@ -124,13 +144,8 @@ export default function Features({ previewImageUrl, localPreviewUrl, predictUi }
   //   { label: 'ResNet-50', value: 80, barColor: '#3b82f6' },
   //   { label: 'DenseNet-121', value: 75, barColor: '#22c55e' },
   // ];
-  const modelRows = pred && riskPct != null
-  ? contributionBars(Number(pred.risk_score))
-  : [
-      { label: 'MobileNetV2', value: 100, barColor: '#6366f1' },
-      { label: 'EfficientNetB2', value: 0, barColor: '#f59e0b' },
-      { label: 'DenseNet121', value: 0, barColor: '#22c55e' },
-    ];
+  // const modelRows = pred && riskPct != null
+  const modelRows = contributionBars(pred?.model_contributions);
   return (
     <Box sx={{ bgcolor: pageBg }}>
       <Container id="features" maxWidth="lg" sx={{ pt: { xs: 4, md: 5 }, pb: { xs: 6, md: 7 } }}>
