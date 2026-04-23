@@ -1,8 +1,15 @@
+type ModelContributions = {
+  mobilenetv2: number;
+  efficientnetb2: number;
+  densenet121: number;
+};
+
 export type PredictResponse = {
   diagnosis: string;
   risk_score: number;
   confidence_label: string;
   heatmap: string;
+  model_contributions?: ModelContributions;
 };
 
 export type PredictUiState = {
@@ -251,17 +258,58 @@ function pickNum(o: Record<string, unknown>, ...keys: string[]): number {
   return NaN;
 }
 
+function clampPct(n: number): number {
+  return Math.max(0, Math.min(100, n));
+}
+
+function pickContributionNum(o: Record<string, unknown>, key: string): number {
+  const v = o[key];
+  if (typeof v === 'number' && Number.isFinite(v)) return clampPct(v);
+  if (typeof v === 'string' && v.trim() !== '') {
+    const n = Number(v);
+    if (Number.isFinite(n)) return clampPct(n);
+  }
+  return 0;
+}
+
+// function normalizePredictResponse(raw: unknown): PredictResponse {
+//   if (!raw || typeof raw !== 'object') {
+//     throw new Error('Invalid API response: expected a JSON object.');
+//   }
+//   const o = raw as Record<string, unknown>;
+//   const diagnosis = pickStr(o, 'diagnosis', 'Diagnosis');
+//   const risk_score = pickNum(o, 'risk_score', 'riskScore');
+//   if (!Number.isFinite(risk_score)) {
+//     throw new Error('Invalid API response: risk_score is not a number.');
+//   }
+//   const confidence_label = pickStr(o, 'confidence_label', 'confidenceLabel');
+//   let heatmap = pickStr(o, 'heatmap', 'Heatmap');
+//   if (heatmap.startsWith('data:')) {
+//     const comma = heatmap.indexOf(',');
+//     if (comma !== -1) {
+//       heatmap = heatmap.slice(comma + 1);
+//     }
+//   }
+//   if (!heatmap.trim()) {
+//     throw new Error('Invalid API response: empty heatmap.');
+//   }
+//   return { diagnosis, risk_score, confidence_label, heatmap };
+// }
+
 function normalizePredictResponse(raw: unknown): PredictResponse {
   if (!raw || typeof raw !== 'object') {
     throw new Error('Invalid API response: expected a JSON object.');
   }
+
   const o = raw as Record<string, unknown>;
   const diagnosis = pickStr(o, 'diagnosis', 'Diagnosis');
   const risk_score = pickNum(o, 'risk_score', 'riskScore');
   if (!Number.isFinite(risk_score)) {
     throw new Error('Invalid API response: risk_score is not a number.');
   }
+
   const confidence_label = pickStr(o, 'confidence_label', 'confidenceLabel');
+
   let heatmap = pickStr(o, 'heatmap', 'Heatmap');
   if (heatmap.startsWith('data:')) {
     const comma = heatmap.indexOf(',');
@@ -272,5 +320,17 @@ function normalizePredictResponse(raw: unknown): PredictResponse {
   if (!heatmap.trim()) {
     throw new Error('Invalid API response: empty heatmap.');
   }
-  return { diagnosis, risk_score, confidence_label, heatmap };
+
+  let model_contributions: ModelContributions | undefined;
+  const mcRaw = o.model_contributions;
+  if (mcRaw && typeof mcRaw === 'object') {
+    const mc = mcRaw as Record<string, unknown>;
+    model_contributions = {
+      mobilenetv2: pickContributionNum(mc, 'mobilenetv2'),
+      efficientnetb2: pickContributionNum(mc, 'efficientnetb2'),
+      densenet121: pickContributionNum(mc, 'densenet121'),
+    };
+  }
+
+  return { diagnosis, risk_score, confidence_label, heatmap, model_contributions };
 }
