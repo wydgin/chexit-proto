@@ -58,11 +58,18 @@ export default function Hero({
     if (!file) {
       return;
     }
-    if (!file.type.startsWith('image/')) {
-      setUploadError('Please upload an image file.');
+    const isImage = file.type.startsWith('image/');
+    const isDicom =
+      file.type === 'application/dicom' ||
+      file.type === 'application/octet-stream' ||
+      /\.(dcm|dicom)$/i.test(file.name);
+
+    if (!isImage && !isDicom) {
+      setUploadError('Please upload PNG/JPG or DICOM (.dcm).');
       setUploadSuccess(false);
       return;
     }
+
     if (file.size > MAX_IMAGE_BYTES) {
       setUploadError('Max file size is 10MB.');
       setUploadSuccess(false);
@@ -72,7 +79,10 @@ export default function Hero({
     selectedFileRef.current = file;
     setUploadError(null);
     setUploadSuccess(false);
-    setLocalPreviewUrl(URL.createObjectURL(file));
+    setLocalPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return isDicom ? null : URL.createObjectURL(file);
+    });
     onPredictUiChange?.({ loading: false, error: null, data: null });
   };
 
@@ -97,13 +107,17 @@ export default function Hero({
     }
 
     if (file !== selectedFile) {
+      const isDicom =
+        file.type === 'application/dicom' ||
+        file.type === 'application/octet-stream' ||
+        /\.(dcm|dicom)$/i.test(file.name);
       setSelectedFile(file);
       selectedFileRef.current = file;
       setLocalPreviewUrl((prev) => {
         if (prev) {
           URL.revokeObjectURL(prev);
         }
-        return URL.createObjectURL(file);
+        return isDicom ? null : URL.createObjectURL(file);
       });
     }
 
@@ -185,7 +199,7 @@ export default function Hero({
               fontSize: 'clamp(3rem, 10vw, 3.5rem)',
             }}
           >
-            Our&nbsp;latest&nbsp;
+            Your&nbsp;latest&nbsp;
             <Typography
               component="span"
               variant="h1"
@@ -221,7 +235,7 @@ export default function Hero({
               type="file"
               ref={fileInputRef}
               onChange={handleFileChange}
-              accept="image/*"
+              accept="image/*,.dcm,.dicom,application/dicom"
               style={{ display: 'none' }}
             />
             <Button

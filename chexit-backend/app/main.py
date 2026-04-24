@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import io
+import numpy as np
+from pydicom import dcmread
+from pydicom.pixel_data_handlers.util import apply_voi_lut
+from PIL import Image
 import logging
 import os
 import sys
@@ -13,13 +17,48 @@ os.environ.setdefault("CUDA_VISIBLE_DEVICES", "-1")
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
-from PIL import Image
 from pydantic import BaseModel, Field
 
 from app.chexit_inference import predict_chexit_from_pil_rgb
 from app.model_loader import download_models_if_needed
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+
+_DICOM_EXTS = (".dcm", ".dicom")
+_DICOM_CTYPES = {"application/dicom", "application/dicom+json", "application/octet-stream"}
+
+def _looks_like_dicom(upload: UploadFile) -> bool:
+    ctype = (upload.content_type or "").lower()
+    name = (upload.filename or "").lower()
+    return (ctype in _DICOM_CTYPES) or name.endswith(_DICOM_EXTS)
+
+def _dicom_bytes_to_pil_rgb(file_bytes: bytes) -> Image.Image:
+    ds = dcmread(io.BytesIO(file_bytes), force=True)
+    if "PixelData" not in ds:
+        raise ValueError("DICOM has no pixel data.")
+
+    arr = ds.pixel_array
+    # Multi-frame: use first frame for now
+    if arr.ndim == 3:
+        arr = arr[0]
+
+    arr = apply_voi_lut(arr, ds) if hasattr(ds, "WindowCenter") else arr
+    arr = arr.astype(np.float32)
+
+    slope = float(getattr(ds, "RescaleSlope", 1.0))
+    intercept = float(getattr(ds, "RescaleIntercept", 0.0))
+    arr = arr * slope + intercept
+
+    mn, mx = float(arr.min()), float(arr.max())
+    if mx <= mn:
+        raise ValueError("DICOM pixel range is invalid.")
+    arr = ((arr - mn) / (mx - mn) * 255.0).clip(0, 255).astype(np.uint8)
+
+    # MONOCHROME1 means inverted grayscale
+    if str(getattr(ds, "PhotometricInterpretation", "")).upper() == "MONOCHROME1":
+        arr = 255 - arr
+
+    return Image.fromarray(arr).convert("RGB")
 
 def _api_logger() -> logging.Logger:
     log = logging.getLogger("chexit.api")
@@ -96,19 +135,22 @@ def health() -> dict[str, str]:
 
 @app.post("/predict", response_model=PredictResponse)
 async def predict(file: UploadFile = File(...)) -> PredictResponse:
-    if not file.content_type or not file.content_type.startswith("image/"):
+    is_image = bool(file.content_type and file.content_type.startswith("image/"))
+    is_dicom = _looks_like_dicom(file)
+
+    if not (is_image or is_dicom):
         raise HTTPException(
             status_code=400,
-            detail="Please upload an image file.",
+            detail="Please upload an image (PNG/JPG) or DICOM (.dcm).",
         )
 
     file_bytes = await file.read()
     if len(file_bytes) > MAX_UPLOAD_BYTES:
-    raise HTTPException(
-        status_code=413,
-        detail="Max file size is 10MB.",
-    )
-    
+        raise HTTPException(
+            status_code=413,
+            detail="Max file size is 10MB.",
+        )
+
     _api_log.info(
         "POST /predict filename=%r content_type=%s bytes=%d",
         file.filename,
@@ -117,9 +159,12 @@ async def predict(file: UploadFile = File(...)) -> PredictResponse:
     )
 
     try:
-        image = Image.open(io.BytesIO(file_bytes)).convert("RGB")
+        if is_dicom:
+            image = _dicom_bytes_to_pil_rgb(file_bytes)
+        else:
+            image = Image.open(io.BytesIO(file_bytes)).convert("RGB")
     except Exception:
-        raise HTTPException(status_code=400, detail="Invalid image.")
+        raise HTTPException(status_code=400, detail="Invalid image/DICOM.")
 
     t0 = time.perf_counter()
     try:
