@@ -93,5 +93,3 @@ def download_models_if_needed() -> None:
                 f"gdown failed or file too small for {name} ({path}). "
                 "Check that the Drive file is public (Anyone with the link) and the ID is correct."
             )
-eck that the Drive file is public (Anyone with the link) and the ID is correct."
-            )
