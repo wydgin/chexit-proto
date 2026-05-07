@@ -10,7 +10,7 @@
    pip install -r requirements.txt
    ```
 
-2. **Assets** — U-Net weights under `../assets/models/` (gitignored). Either copy `unet_lung_seg_best.keras` locally or let startup download from Google Drive (leave `CHEXIT_SKIP_GDOWN` unset). MobileNet fold weights live in `../assets/tb_classifier_output/weights/` (tracked in git).
+2. **Assets** — U-Net weights under `../assets/models/` (gitignored). Either copy `unet_lung_seg_best.keras` locally or let startup download from Google Drive (leave `CHEXIT_SKIP_GDOWN` unset). MobileNet fold weights live in `../assets/mobilenet_tb_output/weights/` (tracked in git).
 
 3. **Run the server**
 

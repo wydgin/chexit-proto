@@ -15,11 +15,18 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 ASSETS = REPO_ROOT / "assets"
 SAMPLE_CXR = ASSETS / "cxrin.png"
 UNET_PATH = ASSETS / "models" / "unet_lung_seg_best.keras"
-MOBILENET_WEIGHTS = ASSETS / "tb_classifier_output" / "weights" / "fold_0_weights.weights.h5"
+MOBILENET_WEIGHTS = ASSETS / "mobilenet_tb_output" / "weights" / "fold_1_weights.weights.h5"
+EFFICIENTNET_WEIGHTS = ASSETS / "efficientnet_tb_output" / "weights" / "fold_1.weights.h5"
+DENSENET_WEIGHTS = ASSETS / "densenet_tb_output" / "weights" / "fold_1_phase2_best.weights.h5"
 
 
 def predict_dependencies_present() -> bool:
-    return UNET_PATH.is_file() and MOBILENET_WEIGHTS.is_file()
+    return (
+        UNET_PATH.is_file()
+        and MOBILENET_WEIGHTS.is_file()
+        and EFFICIENTNET_WEIGHTS.is_file()
+        and DENSENET_WEIGHTS.is_file()
+    )
 
 
 def _png_bytes() -> bytes:
@@ -48,7 +55,7 @@ def test_health(client: TestClient) -> None:
 
 @pytest.mark.skipif(
     not predict_dependencies_present(),
-    reason=f"Missing U-Net or MobileNet weights under {ASSETS} (gitignored; copy locally).",
+    reason=f"Missing U-Net/MobileNet/EfficientNet/DenseNet weights under {ASSETS} (gitignored; copy locally).",
 )
 def test_predict_returns_contract(client: TestClient) -> None:
     raw = _sample_image_bytes()

@@ -18,8 +18,8 @@ export type PredictUiState = {
   data: PredictResponse | null;
 };
 
-/** Production FastAPI on Render (no trailing slash). Override with VITE_CHEXIT_API_URL. */
-export const CHEXIT_RENDER_API_ORIGIN = 'https://chexit.onrender.com';
+/** Production FastAPI on DO (no trailing slash). Override with VITE_CHEXIT_API_URL. */
+export const CHEXIT_DEFAULT_API_ORIGIN = 'https://chexit.app';
 
 /**
  * Same-origin `/api/predict` when Vite dev/preview proxies to local :8000.
@@ -47,7 +47,7 @@ function resolvedApiOrigin(): string {
   if (trimmed) {
     return trimmed.replace(/\/$/, '');
   }
-  return CHEXIT_RENDER_API_ORIGIN;
+  return CHEXIT_DEFAULT_API_ORIGIN;
 }
 
 function predictUrl(): string {
@@ -91,7 +91,7 @@ function networkErrorHint(label: string): string {
   return (
     `Cannot reach the API (${label}). ` +
       `If testing locally: run FastAPI on port 8000 and use npm run dev so /api proxies. ` +
-      `If using the hosted API: open ${CHEXIT_RENDER_API_ORIGIN}/health in a browser. ` +
+      `If using the hosted API: open ${CHEXIT_DEFAULT_API_ORIGIN}/health in a browser. ` +
       `Override the API host with VITE_CHEXIT_API_URL. Avoid uvicorn --reload during long /predict.`
   );
 }
@@ -199,7 +199,7 @@ export async function predictImage(file: File): Promise<PredictResponse> {
       bodyText.trimStart().toLowerCase().startsWith('<!') ||
       bodyText.trimStart().toLowerCase().startsWith('<html');
     const hint = looksHtml
-      ? `The server returned HTML instead of JSON (often a 404/SPA page). Use npm run dev for /api proxy, or expect JSON from ${CHEXIT_RENDER_API_ORIGIN}/predict.`
+      ? `The server returned HTML instead of JSON (often a 404/SPA page). Use npm run dev for /api proxy, or expect JSON from ${CHEXIT_DEFAULT_API_ORIGIN}/predict.`
       : 'The response was not valid JSON (connection cut, proxy error, or wrong endpoint).';
     logClient('predict: JSON.parse failed', {
       hint,
@@ -326,9 +326,9 @@ function normalizePredictResponse(raw: unknown): PredictResponse {
   if (mcRaw && typeof mcRaw === 'object') {
     const mc = mcRaw as Record<string, unknown>;
     model_contributions = {
-      mobilenetv2: pickContributionNum(mc, 'mobilenetv2'),
-      efficientnetb2: pickContributionNum(mc, 'efficientnetb2'),
-      densenet121: pickContributionNum(mc, 'densenet121'),
+      mobilenetv2: pickContributionNum(mc, 'mobilenet-v2'),
+      efficientnetb2: pickContributionNum(mc, 'efficientnet-b2'),
+      densenet121: pickContributionNum(mc, 'densenet-121'),
     };
   }
 

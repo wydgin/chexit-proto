@@ -6,7 +6,7 @@ uint8 grayscale → resize to 224 (INTER_AREA) → CLAHE when USE_CLAHE in mobil
 3-channel stack → float32 / 255.0. The classifier sees [0, 1] (no mobilenet_v2.preprocess_input).
 
 Official inference model (MobileNet branch, thesis / mbnet_test default):
-  fold 0 weights: tb_classifier_output/weights/fold_0_weights.weights.h5
+  fold 0 weights: mobilenet_tb_output/weights/fold_0_weights.weights.h5
   See OFFICIAL_INFERENCE_FOLD and load_official_mobilenet().
 
 Inputs: U-Net–segmented CXRs (e.g. unet_export/.../*_unetseg.png), same distribution as training.

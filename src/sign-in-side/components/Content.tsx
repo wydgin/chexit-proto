@@ -64,7 +64,7 @@ export default function Content() {
         color="primary"
         sx={{ alignSelf: { xs: 'stretch', md: 'flex-start' }, mt: 1 }}
       >
-        Try the analyzer — upload &amp; heatmap
+        Try the analyzer — upload &amp; get a heatmap
       </Button>
     </Stack>
   );
