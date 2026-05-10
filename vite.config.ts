@@ -23,6 +23,8 @@ export default defineConfig({
   server: {
     // Allow Cursor / tunnel hostnames that are not "localhost"
     host: true,
+    // Allow rotating ngrok free subdomains during local sharing
+    allowedHosts: ['.ngrok-free.dev', '.ngrok-free.app'],
     // Dev + HTTPS preview: same-origin /api → FastAPI (no mixed content)
     proxy: { ...apiProxy },
   },

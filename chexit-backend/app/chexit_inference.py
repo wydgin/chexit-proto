@@ -1,6 +1,11 @@
 """
-Chexit inference: U-Net lung mask (assets/models) → classifier ensemble
-(MobileNet + EfficientNet + DenseNet) with MobileNet Score-CAM heatmap.
+Chexit inference pipeline (single image):
+
+1. Optional downscale (`CHEXIT_MAX_CXR_EDGE`)
+2. Optional global CLAHE on full‑resolution grayscale (`CHEXIT_USE_CLAHE`)
+3. U‑Net lung segmentation
+4. Per‑model preprocessing (mask → resize → head preprocess), then predictions
+5. Per‑model Score‑CAM, then ensemble‑weighted fusion of CAMs
 
 Single module for FastAPI — no mobilenetv2_prog dependency; paths resolve to repo ``assets/``.
 """
@@ -419,6 +424,14 @@ def apply_clahe(
     return clahe.apply(gray_uint8)
 
 
+def apply_global_clahe_bgr(bgr_uint8: np.ndarray) -> np.ndarray:
+    """CLAHE on luminance at native (post‑downscale) resolution before U‑Net and classifiers."""
+    if not USE_CLAHE:
+        return bgr_uint8
+    gray = _to_gray_uint8(bgr_uint8)
+    return cv2.cvtColor(apply_clahe(gray), cv2.COLOR_GRAY2BGR)
+
+
 def apply_lung_mask(
     gray_uint8: np.ndarray,
     mask: np.ndarray,
@@ -472,10 +485,8 @@ def preprocess_cxr_for_mobilenet(
     gray = _to_gray_uint8(image_bgr_or_gray)
     masked_gray = apply_lung_mask(gray, lung_mask) if lung_mask is not None else gray
     resized = cv2.resize(masked_gray, (img_size, img_size), interpolation=cv2.INTER_AREA)
-    if USE_CLAHE:
-        proc_gray = apply_clahe(resized)
-    else:
-        proc_gray = resized
+    # CLAHE is applied once globally upstream (predict path / run_scorecam path).
+    proc_gray = resized
     overlay_base_bgr = cv2.cvtColor(proc_gray, cv2.COLOR_GRAY2BGR)
     x255 = np.stack([proc_gray, proc_gray, proc_gray], axis=-1).astype(np.float32)
     x_model = np.expand_dims(x255, axis=0)
@@ -504,8 +515,6 @@ def preprocess_cxr_for_densenet(
     gray = _to_gray_uint8(image_bgr_or_gray)
     masked_gray = apply_lung_mask(gray, lung_mask) if lung_mask is not None else gray
     resized = cv2.resize(masked_gray, (256, 256), interpolation=cv2.INTER_AREA)
-    if USE_CLAHE:
-        resized = apply_clahe(resized)
     rgb = np.stack([resized, resized, resized], axis=-1).astype(np.float32)
     x = tf.keras.applications.densenet.preprocess_input(rgb)
     return np.expand_dims(x, axis=0)
@@ -823,7 +832,10 @@ def run_scorecam_with_unet_lung_mask(
     """
     Returns predicted_label, prob_tb, overlay_bgr at **same H×W as original_bgr**.
     CAM is computed at 224² then upsampled; blend uses native-resolution grayscale base + lung mask.
+
+    Applies the same global CLAHE policy as ``predict_chexit_from_bgr`` when ``USE_CLAHE``.
     """
+    original_bgr = apply_global_clahe_bgr(original_bgr)
     gray = _to_gray_uint8(original_bgr)
     if lung_mask_fullres.shape != gray.shape:
         lung_mask_fullres = cv2.resize(
@@ -836,7 +848,7 @@ def run_scorecam_with_unet_lung_mask(
         lung_mask_fullres = np.ones_like(lung_mask_fullres, dtype=np.float32)
         _pipeline_log.info("  Lung mask tiny (< %d px); using full image for mask.", MIN_LUNG_PIXELS)
 
-    _pipeline_log.info("  Preprocess resize %s, CLAHE=%s…", IMG_SIZE, USE_CLAHE)
+    _pipeline_log.info("  Preprocess resize %s (CLAHE already global upstream=%s)", IMG_SIZE, USE_CLAHE)
     x, _, _ = preprocess_cxr_for_mobilenet(original_bgr, lung_mask=lung_mask_fullres)
     lung_m_224 = cv2.resize(
         lung_mask_fullres.astype(np.float32),
@@ -929,13 +941,15 @@ def _maybe_downscale_bgr_max_edge(bgr_uint8: np.ndarray) -> np.ndarray:
 
 def predict_chexit_from_bgr(bgr_uint8: np.ndarray) -> Dict[str, Any]:
     """
-    Full pipeline for API: U-Net mask → MobileNet + Score-CAM overlay.
+    Full pipeline for API: optional global CLAHE → U-Net mask → ensemble classifiers +
+    fused Score-CAM overlay.
     ``bgr_uint8``: OpenCV BGR, uint8.
     """
     t_all = time.perf_counter()
     bgr_uint8 = _maybe_downscale_bgr_max_edge(bgr_uint8)
+    bgr_uint8 = apply_global_clahe_bgr(bgr_uint8)
     h0, w0 = bgr_uint8.shape[:2]
-    _pipeline_log.info("=== pipeline start image=%dx%d ===", w0, h0)
+    _pipeline_log.info("=== pipeline start image=%dx%d CLAHE_global=%s ===", w0, h0, USE_CLAHE)
 
     t0 = time.perf_counter()
     unet = get_unet()
@@ -954,7 +968,7 @@ def predict_chexit_from_bgr(bgr_uint8: np.ndarray) -> Dict[str, Any]:
     _pipeline_log.info("DenseNet classifier ready (load/if-cached %.2fs)", time.perf_counter() - t0)
 
     t0 = time.perf_counter()
-    _pipeline_log.info("Step 1/4: lung segmentation (U-Net @%d)…", UNET_SIZE)
+    _pipeline_log.info("Step 1/4: lung segmentation after global CLAHE (U-Net @%d)…", UNET_SIZE)
     lung_mask = lung_mask_from_unet(bgr_uint8, unet)
     _pipeline_log.info("Step 1/4 done in %.2fs", time.perf_counter() - t0)
 
