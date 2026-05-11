@@ -7,6 +7,7 @@ import CardHeader from '@mui/material/CardHeader';
 import Typography from '@mui/material/Typography';
 import Stack from '@mui/material/Stack';
 import LinearProgress from '@mui/material/LinearProgress';
+import CircularProgress from '@mui/material/CircularProgress';
 import Chip from '@mui/material/Chip';
 import Divider from '@mui/material/Divider';
 import IconButton from '@mui/material/IconButton';
@@ -190,12 +191,6 @@ export default function Features({
           AI-assisted TB overview
         </Typography>
 
-        {predictUi.error ? (
-          <Typography variant="body2" color="error" sx={{ mb: 2 }}>
-            {predictUi.error}
-          </Typography>
-        ) : null}
-
         <Box
           sx={{
             display: 'flex',
@@ -336,33 +331,42 @@ export default function Features({
             fontWeight: 900,
             lineHeight: 1.05,
             fontSize: { xs: '2.8rem', md: '3.4rem' },
+            minHeight: { xs: 48, md: 58 },
+            display: 'flex',
+            alignItems: 'center',
           }}
         >
-          {diagnosisLine || (predictUi.loading ? '…' : '—')}
+          {diagnosisLine ? (
+            diagnosisLine
+          ) : predictUi.loading ? (
+            <CircularProgress size={30} thickness={5} />
+          ) : (
+            '—'
+          )}
         </Typography>
-        <Chip
-          label={
-            confidenceLine || (predictUi.loading ? 'Analyzing…' : 'Run Analyze')
-          }
-          size="small"
-          sx={{
-            mt: 1,
-            alignSelf: 'flex-start',
-            bgcolor: isHighRisk ? 'rgba(248,113,113,0.12)' : 'rgba(34,197,94,0.12)',
-            border: isHighRisk ? '1px solid #f87171' : '1px solid #4ade80',
-            color: isHighRisk ? '#fecaca' : '#bbf7d0',
-            fontSize: 11,
-            height: 24,
-            borderRadius: 999,
-            px: 1.5,
-            ...(!pred &&
-              !predictUi.loading && {
-                bgcolor: 'action.hover',
-                borderColor: 'divider',
-                color: 'text.secondary',
-              }),
-          }}
-        />
+        {confidenceLine || !predictUi.loading ? (
+          <Chip
+            label={confidenceLine || 'Run Analyze'}
+            size="small"
+            sx={{
+              mt: 1,
+              alignSelf: 'flex-start',
+              bgcolor: isHighRisk ? 'rgba(239,68,68,0.12)' : 'rgba(34,197,94,0.12)',
+              border: isHighRisk ? '1px solid #ef4444' : '1px solid #22c55e',
+              color: isHighRisk ? '#ef4444' : '#16a34a',
+              fontSize: 11,
+              height: 24,
+              borderRadius: 999,
+              px: 1.5,
+              ...(!pred &&
+                !predictUi.loading && {
+                  bgcolor: 'action.hover',
+                  borderColor: 'divider',
+                  color: 'text.secondary',
+                }),
+            }}
+          />
+        ) : null}
       </Box>
 
       <Box sx={{ mt: 3 }}>
@@ -378,9 +382,18 @@ export default function Features({
             fontWeight: 900,
             lineHeight: 1,
             fontSize: { xs: '3.8rem', md: '4.4rem' }, // big 70%
+            minHeight: { xs: 64, md: 72 },
+            display: 'flex',
+            alignItems: 'center',
           }}
         >
-          {riskPct != null ? `${riskPct}%` : predictUi.loading ? '…' : '—'}
+          {riskPct != null ? (
+            `${riskPct}%`
+          ) : predictUi.loading ? (
+            <CircularProgress size={34} thickness={5} />
+          ) : (
+            '—'
+          )}
         </Typography>
         <Typography variant="caption" sx={{ color: mutedText, display: 'block', mt: 1 }}>
           {pred ? 'Estimated TB probability from the screening model.' : 'Run Analyze on a chest X-ray to see results.'}

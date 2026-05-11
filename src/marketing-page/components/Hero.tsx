@@ -1,5 +1,4 @@
 import * as React from 'react';
-import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -11,6 +10,7 @@ import Typography from '@mui/material/Typography';
 import Chip from '@mui/material/Chip';
 import { predictImagesSequential, releaseBatchPreviewUrls, uploadImage } from '../../api/chexit';
 import type { PredictUiState } from '../../api/chexit';
+import { gray } from '../../../shared-theme/themePrimitives';
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_BATCH_IMAGES = 5;
 
@@ -254,7 +254,20 @@ export default function Hero({
               size="small"
               onClick={handleBrowseClick}
               disabled={uploading || analyzing}
-              sx={{ minWidth: 'fit-content' }}
+              sx={(theme) => ({
+                minWidth: 'fit-content',
+                '&.Mui-disabled': {
+                  color: 'rgba(15,23,42,0.74)',
+                  borderColor: 'rgba(100,116,139,0.4)',
+                  backgroundColor: 'rgba(241,245,249,0.75)',
+                  opacity: 1,
+                  ...theme.applyStyles('dark', {
+                    color: 'rgba(241,245,249,0.92)',
+                    borderColor: 'rgba(148,163,184,0.55)',
+                    backgroundColor: 'rgba(30,41,59,0.85)',
+                  }),
+                },
+              })}
             >
               {selectedFiles.length > 0 ? `${selectedFiles.length} file(s) selected` : 'Browse files (max 5)'}
             </Button>
@@ -266,14 +279,34 @@ export default function Hero({
               onClick={handleAnalyze}
               disabled={uploading || analyzing}
               startIcon={analyzing ? <CircularProgress size={16} color="inherit" /> : undefined}
-              sx={{
+              sx={(theme) => ({
                 minWidth: 'fit-content',
                 ...(!(selectedFiles.length > 0) && {
                   backgroundColor: 'action.disabledBackground',
-                  color: 'action.disabled',
+                  color: 'text.secondary',
                   borderColor: 'action.disabled',
                 }),
-              }}
+                ...(selectedFiles.length > 0 && {
+                  color: 'primary.contrastText',
+                }),
+                '&.Mui-disabled': analyzing
+                  ? {
+                      color: 'white',
+                      backgroundColor: gray[900],
+                      backgroundImage: `linear-gradient(to bottom, ${gray[700]}, ${gray[800]})`,
+                      boxShadow: `inset 0 1px 0 ${gray[600]}, inset 0 -1px 0 1px hsl(220, 0%, 0%)`,
+                      borderColor: gray[700],
+                      opacity: 1,
+                      ...theme.applyStyles('dark', {
+                        color: 'black',
+                        backgroundColor: gray[50],
+                        backgroundImage: `linear-gradient(to bottom, ${gray[100]}, ${gray[50]})`,
+                        boxShadow: 'inset 0 -1px 0 hsl(220, 30%, 80%)',
+                        borderColor: gray[50],
+                      }),
+                    }
+                  : undefined,
+              })}
             >
               {analyzing ? 'Analyzing…' : 'Analyze'}
             </Button>
@@ -285,7 +318,20 @@ export default function Hero({
               onClick={handleUpload}
               disabled={selectedFiles.length === 0 || uploading || analyzing}
               startIcon={uploading ? <CircularProgress size={16} color="inherit" /> : undefined}
-              sx={{ minWidth: 'fit-content' }}
+              sx={(theme) => ({
+                minWidth: 'fit-content',
+                '&.Mui-disabled': {
+                  color: 'rgba(15,23,42,0.55)',
+                  borderColor: 'rgba(100,116,139,0.35)',
+                  backgroundColor: 'rgba(241,245,249,0.6)',
+                  opacity: 1,
+                  ...theme.applyStyles('dark', {
+                    color: 'rgba(241,245,249,0.78)',
+                    borderColor: 'rgba(148,163,184,0.45)',
+                    backgroundColor: 'rgba(30,41,59,0.65)',
+                  }),
+                },
+              })}
             >
               {uploading ? 'Uploading…' : 'Upload to cloud'}
             </Button>
@@ -367,9 +413,46 @@ export default function Hero({
             </Stack>
           ) : null}
           {!predictUi.loading && !analyzing && predictUi.error ? (
-            <Alert severity="error" sx={{ maxWidth: 560, width: '100%', textAlign: 'left' }}>
-              {predictUi.error}
-            </Alert>
+            <Box
+              role="alert"
+              sx={(theme) => ({
+                maxWidth: 560,
+                width: '100%',
+                px: 2,
+                py: 1.5,
+                borderRadius: 3,
+                border: '1px solid',
+                borderColor: 'rgba(245, 158, 11, 0.45)',
+                bgcolor: 'rgba(255, 251, 235, 0.6)',
+                backdropFilter: 'blur(10px)',
+                WebkitBackdropFilter: 'blur(10px)',
+                boxShadow: '0 8px 24px rgba(15, 23, 42, 0.08)',
+                ...theme.applyStyles('dark', {
+                  bgcolor: 'rgba(69, 26, 3, 0.45)',
+                  borderColor: 'rgba(245, 158, 11, 0.35)',
+                  boxShadow: '0 8px 24px rgba(2, 6, 23, 0.45)',
+                }),
+              })}
+            >
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Box
+                  sx={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    bgcolor: 'warning.main',
+                    animation: 'pulseDot 1.4s ease-in-out infinite',
+                    '@keyframes pulseDot': {
+                      '0%, 100%': { opacity: 0.45, transform: 'scale(0.95)' },
+                      '50%': { opacity: 1, transform: 'scale(1.08)' },
+                    },
+                  }}
+                />
+                <Typography variant="body2" sx={{ textAlign: 'left', fontWeight: 500 }}>
+                  {predictUi.error}
+                </Typography>
+              </Stack>
+            </Box>
           ) : null}
           <Typography
             variant="caption"

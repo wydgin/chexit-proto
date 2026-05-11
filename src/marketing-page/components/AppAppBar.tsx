@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { Link as RouterLink } from 'react-router-dom';
 import { styled, alpha } from '@mui/material/styles';
 import Box from '@mui/material/Box';
 import AppBar from '@mui/material/AppBar';
@@ -66,18 +65,6 @@ export default function AppAppBar() {
               alignItems: 'center',
             }}
           >
-            <Button 
-              color="primary" 
-              variant="text" 
-              size="small"
-              component={RouterLink}
-              to="/"
-            >
-              Sign in
-            </Button>
-            <Button color="primary" variant="contained" size="small">
-              Sign up
-            </Button>
             <ColorModeIconDropdown />
           </Box>
           <Box sx={{ display: { xs: 'flex', md: 'none' }, gap: 1 }}>
@@ -110,20 +97,7 @@ export default function AppAppBar() {
                 <MenuItem>Diagnosis Dashboard</MenuItem>
                 <Divider sx={{ my: 3 }} />
                 <MenuItem>
-                  <Button color="primary" variant="contained" fullWidth>
-                    Sign up
-                  </Button>
-                </MenuItem>
-                <MenuItem>
-                  <Button 
-                    color="primary" 
-                    variant="outlined" 
-                    fullWidth
-                    component={RouterLink}
-                    to="/"
-                  >
-                    Sign in
-                  </Button>
+                  <ColorModeIconDropdown size="medium" />
                 </MenuItem>
               </Box>
             </Drawer>
