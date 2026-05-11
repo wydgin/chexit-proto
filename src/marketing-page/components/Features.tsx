@@ -1,9 +1,16 @@
 import * as React from 'react';
 import Container from '@mui/material/Container';
 import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
 import CardHeader from '@mui/material/CardHeader';
+import Collapse from '@mui/material/Collapse';
+import Dialog from '@mui/material/Dialog';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import DialogTitle from '@mui/material/DialogTitle';
+import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import Stack from '@mui/material/Stack';
 import LinearProgress from '@mui/material/LinearProgress';
@@ -13,8 +20,145 @@ import Divider from '@mui/material/Divider';
 import IconButton from '@mui/material/IconButton';
 import ChevronLeft from '@mui/icons-material/ChevronLeft';
 import ChevronRight from '@mui/icons-material/ChevronRight';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import FlagOutlinedIcon from '@mui/icons-material/FlagOutlined';
+import type { Theme } from '@mui/material/styles';
 import type { PredictUiState } from '../../api/chexit';
 import { fetchLatestUpload, type UploadRecord } from '../../api/chexit';
+
+type FlagCategory = 'false-positive' | 'false-negative' | 'wrong-region' | 'image-quality' | 'other';
+
+type AnomalyFlag = {
+  categories: FlagCategory[];
+  note: string;
+  savedAt: string;
+  snapshot: {
+    fileName: string;
+    diagnosis: string;
+    riskScore: number | null;
+    confidence: string;
+  };
+};
+
+type FlagMap = Record<string, AnomalyFlag>;
+
+const FLAG_STORAGE_KEY = 'chexit:anomaly-flags:v1';
+
+const FLAG_CATEGORIES: { id: FlagCategory; label: string }[] = [
+  { id: 'false-positive', label: 'False positive' },
+  { id: 'false-negative', label: 'False negative' },
+  { id: 'wrong-region', label: 'Wrong region' },
+  { id: 'image-quality', label: 'Image quality' },
+  { id: 'other', label: 'Other' },
+];
+
+const FLAG_CATEGORY_IDS = FLAG_CATEGORIES.map((c) => c.id);
+
+function categoryLabel(id: FlagCategory): string {
+  return FLAG_CATEGORIES.find((c) => c.id === id)?.label ?? id;
+}
+
+function isFlagCategory(value: unknown): value is FlagCategory {
+  return typeof value === 'string' && (FLAG_CATEGORY_IDS as readonly string[]).includes(value);
+}
+
+/** Accept new schema (`categories[]`) and the legacy single-`category` shape side-by-side. */
+function migrateFlag(raw: unknown): AnomalyFlag | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const f = raw as Record<string, unknown>;
+  let categories: FlagCategory[] = [];
+  if (Array.isArray(f.categories)) {
+    categories = f.categories.filter(isFlagCategory);
+  } else if (isFlagCategory(f.category)) {
+    categories = [f.category];
+  }
+  if (categories.length === 0) return null;
+  const snapshotRaw = (f.snapshot && typeof f.snapshot === 'object'
+    ? (f.snapshot as Record<string, unknown>)
+    : {}) as Record<string, unknown>;
+  return {
+    categories,
+    note: typeof f.note === 'string' ? f.note : '',
+    savedAt: typeof f.savedAt === 'string' ? f.savedAt : new Date().toISOString(),
+    snapshot: {
+      fileName: typeof snapshotRaw.fileName === 'string' ? snapshotRaw.fileName : 'image',
+      diagnosis: typeof snapshotRaw.diagnosis === 'string' ? snapshotRaw.diagnosis : '',
+      riskScore:
+        typeof snapshotRaw.riskScore === 'number' && Number.isFinite(snapshotRaw.riskScore)
+          ? snapshotRaw.riskScore
+          : null,
+      confidence: typeof snapshotRaw.confidence === 'string' ? snapshotRaw.confidence : '',
+    },
+  };
+}
+
+function loadFlags(): FlagMap {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(FLAG_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object') return {};
+    const out: FlagMap = {};
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      const migrated = migrateFlag(value);
+      if (migrated) out[key] = migrated;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function saveFlagsToStorage(map: FlagMap): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(FLAG_STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    /* localStorage full / disabled — silently ignore in prototype */
+  }
+}
+
+/** Empty image slot: glass-style panel for light + dark (replaces solid black placeholders). */
+function liquidGlassImagePlaceholderSx(theme: Theme) {
+  return {
+    borderRadius: 2,
+    width: '100%',
+    aspectRatio: '3 / 4',
+    position: 'relative' as const,
+    overflow: 'hidden',
+    border: '1px solid',
+    borderColor: 'rgba(148, 163, 184, 0.38)',
+    backgroundColor: 'rgba(255, 255, 255, 0.38)',
+    backgroundImage:
+      'linear-gradient(135deg, rgba(255,255,255,0.72) 0%, rgba(255,255,255,0.12) 42%, rgba(186, 230, 253, 0.18) 100%)',
+    backdropFilter: 'blur(14px)',
+    WebkitBackdropFilter: 'blur(14px)',
+    boxShadow:
+      '0 10px 40px rgba(15, 23, 42, 0.07), inset 0 1px 0 rgba(255,255,255,0.75), inset 0 -1px 0 rgba(148,163,184,0.18)',
+    ...theme.applyStyles('dark', {
+      borderColor: 'rgba(148, 163, 184, 0.22)',
+      backgroundColor: 'rgba(15, 23, 42, 0.42)',
+      backgroundImage:
+        'linear-gradient(145deg, rgba(255,255,255,0.14) 0%, rgba(30,41,59,0.55) 45%, rgba(59,130,246,0.1) 100%)',
+      boxShadow:
+        '0 12px 48px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255,255,255,0.1), inset 0 -1px 0 rgba(0,0,0,0.35)',
+    }),
+  };
+}
+
+/**
+ * Truncate long strings in the MIDDLE — useful for DICOM UIDs where the
+ * leading scheme + trailing identifier are both informative.
+ *   "raw_1.2.840.114062.2.192.168.196.13.2013.9.27.9.58.39.43467890"
+ *   → "raw_1.2.840.114…39.43467890"  (max=28)
+ */
+function truncateMiddle(value: string, max: number): string {
+  if (value.length <= max) return value;
+  const head = Math.ceil((max - 1) / 2);
+  const tail = max - 1 - head;
+  return `${value.slice(0, head)}…${value.slice(-tail)}`;
+}
 
 function formatUploadedAt(isoText: string | null): string {
   if (!isoText) return 'Uploaded • recently';
@@ -119,7 +263,10 @@ export default function Features({
   const showPreview = Boolean(previewSrc) && !previewLoadFailed;
   const hasRemoteImage = Boolean(remotePreviewSrc);
   const previewSubheader = hasBatch
-    ? `Image ${safeIndex + 1} of ${predictUi.items.length} • ${selectedItem?.fileName ?? 'selected'}`
+    ? `Image ${safeIndex + 1} of ${predictUi.items.length} • ${truncateMiddle(
+        selectedItem?.fileName ?? 'selected',
+        30,
+      )}`
     : previewLoadFailed
       ? 'No image uploaded'
     : localPreviewUrl && !previewImageUrl
@@ -176,20 +323,121 @@ export default function Features({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [hasBatch, onNavigateIndex, canGoPrev, canGoNext, safeIndex]);
 
+  // ---- Anomaly flags (simplest opt-in, persisted to localStorage) ----
+  /** Keyed by filename: stable enough for a prototype, lets re-running the same image keep its note. */
+  const currentFlagKey: string | null = pred
+    ? (selectedItem?.fileName ?? latestUpload?.fileName ?? null)
+    : null;
+  const [flags, setFlags] = React.useState<FlagMap>(() => loadFlags());
+  const [flagFormOpen, setFlagFormOpen] = React.useState(false);
+  const [flagFormCategories, setFlagFormCategories] = React.useState<FlagCategory[]>([]);
+  const [flagFormNote, setFlagFormNote] = React.useState('');
+  const [logOpen, setLogOpen] = React.useState(false);
+  const currentFlag: AnomalyFlag | null = currentFlagKey ? (flags[currentFlagKey] ?? null) : null;
+  const flagCount = Object.keys(flags).length;
+
+  /** Close the inline form whenever the user navigates to a different image. */
+  React.useEffect(() => {
+    setFlagFormOpen(false);
+  }, [currentFlagKey]);
+
+  const openFlagForm = React.useCallback(() => {
+    if (currentFlag) {
+      setFlagFormCategories(currentFlag.categories);
+      setFlagFormNote(currentFlag.note);
+    } else {
+      setFlagFormCategories([]);
+      setFlagFormNote('');
+    }
+    setFlagFormOpen(true);
+  }, [currentFlag]);
+
+  const toggleFormCategory = React.useCallback((id: FlagCategory) => {
+    setFlagFormCategories((prev) =>
+      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id],
+    );
+  }, []);
+
+  const saveCurrentFlag = React.useCallback(() => {
+    if (!currentFlagKey || !pred || flagFormCategories.length === 0) return;
+    /** Preserve the user-facing order of FLAG_CATEGORIES regardless of click order. */
+    const orderedCategories = FLAG_CATEGORIES.map((c) => c.id).filter((id) =>
+      flagFormCategories.includes(id),
+    );
+    const next: FlagMap = {
+      ...flags,
+      [currentFlagKey]: {
+        categories: orderedCategories,
+        note: flagFormNote.trim(),
+        savedAt: new Date().toISOString(),
+        snapshot: {
+          fileName: selectedItem?.fileName ?? latestUpload?.fileName ?? 'image',
+          diagnosis: diagnosisLine,
+          riskScore: riskPct,
+          confidence: confidenceLine,
+        },
+      },
+    };
+    setFlags(next);
+    saveFlagsToStorage(next);
+    setFlagFormOpen(false);
+  }, [
+    currentFlagKey,
+    pred,
+    flags,
+    flagFormCategories,
+    flagFormNote,
+    selectedItem,
+    latestUpload,
+    diagnosisLine,
+    riskPct,
+    confidenceLine,
+  ]);
+
+  const removeFlag = React.useCallback(
+    (key: string) => {
+      const next = { ...flags };
+      delete next[key];
+      setFlags(next);
+      saveFlagsToStorage(next);
+      if (key === currentFlagKey) {
+        setFlagFormOpen(false);
+      }
+    },
+    [flags, currentFlagKey],
+  );
+
   return (
     <Box sx={{ bgcolor: pageBg }}>
       <Container id="features" maxWidth="lg" sx={{ pt: { xs: 4, md: 5 }, pb: { xs: 6, md: 7 } }}>
-        <Typography
-          variant="h6"
-          sx={{
-            mb: 3,
-            color: 'text.primary',
-            fontWeight: 600,
-            letterSpacing: 0.5,
-          }}
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="space-between"
+          spacing={1}
+          sx={{ mb: 3, flexWrap: 'wrap', rowGap: 1 }}
         >
-          AI-assisted TB overview
-        </Typography>
+          <Typography
+            variant="h6"
+            sx={{
+              color: 'text.primary',
+              fontWeight: 600,
+              letterSpacing: 0.5,
+            }}
+          >
+            AI-assisted TB overview
+          </Typography>
+          {flagCount > 0 ? (
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<FlagOutlinedIcon fontSize="small" />}
+              onClick={() => setLogOpen(true)}
+            >
+              Anomaly log ({flagCount})
+            </Button>
+          ) : null}
+        </Stack>
 
         <Box
           sx={{
@@ -204,6 +452,10 @@ export default function Features({
             variant="outlined"
             sx={{
               flex: 1,
+              // Critical: lets the flex item shrink below its content's intrinsic
+              // width so long DICOM UID filenames in the subheader wrap inside
+              // the card instead of pushing the layout (and the chevrons) out.
+              minWidth: 0,
               bgcolor: cardBg,
               borderColor: cardBorder,
               color: 'text.primary',
@@ -212,12 +464,20 @@ export default function Features({
           >
             <CardHeader
               title={
-                <Stack direction="row" alignItems="center" justifyContent="space-between">
-                  <Typography component="span" sx={{ fontSize: 14, fontWeight: 600 }}>
+                <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+                  <Typography
+                    component="span"
+                    sx={{ fontSize: 14, fontWeight: 600, flexShrink: 0 }}
+                  >
                     Input X-Ray
                   </Typography>
                   {hasBatch ? (
-                    <Stack direction="row" alignItems="center" spacing={0.5}>
+                    <Stack
+                      direction="row"
+                      alignItems="center"
+                      spacing={0.5}
+                      sx={{ flexShrink: 0 }}
+                    >
                       <IconButton
                         size="small"
                         disabled={!canGoPrev}
@@ -239,12 +499,24 @@ export default function Features({
               subheader={previewSubheader}
               sx={{
                 pb: 1,
+                // Lets the content column shrink so long DICOM UIDs wrap inside
+                // the card instead of stretching it out.
+                '& .MuiCardHeader-content': {
+                  minWidth: 0,
+                },
                 '& .MuiCardHeader-title': {
                   width: '100%',
                 },
                 '& .MuiCardHeader-subheader': {
                   color: mutedText,
                   fontSize: 12,
+                  // Keep the filename inline with "Image N of M". Long DICOM
+                  // UIDs are already middle-truncated to ~30 chars upstream;
+                  // this is the belt-and-suspenders fallback if a card is
+                  // narrower than expected.
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
                 },
               }}
             />
@@ -270,16 +542,7 @@ export default function Features({
                   }}
                 />
               ) : (
-                <Box
-                  sx={{
-                    borderRadius: 2,
-                    bgcolor: '#000',
-                    border: '1px dashed',
-                    borderColor: cardBorder,
-                    width: '100%',
-                    aspectRatio: '3 / 4',
-                  }}
-                />
+                <Box aria-hidden sx={(theme) => liquidGlassImagePlaceholderSx(theme)} />
               )}
             </CardContent>
           </Card>
@@ -288,6 +551,7 @@ export default function Features({
             variant="outlined"
             sx={{
               flex: 1.1,
+              minWidth: 0,
               bgcolor: cardBg,
               borderColor: cardBorder,
               color: 'text.primary',
@@ -314,16 +578,6 @@ export default function Features({
         DIAGNOSIS
       </Typography>
 
-      {pred ? (
-        <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5, mb: 0.5 }}>
-          TB screening:{' '}
-          <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>
-            {isHighRisk ? 'Positive call' : 'Negative call'}
-          </Box>
-          {riskPct != null ? ` • model score ${riskPct}%` : null}
-        </Typography>
-      ) : null}
-
       <Box sx={{ mt: 1 }}>
         <Typography
           component="h2"
@@ -344,9 +598,9 @@ export default function Features({
             '—'
           )}
         </Typography>
-        {confidenceLine || !predictUi.loading ? (
+        {confidenceLine.trim() ? (
           <Chip
-            label={confidenceLine || 'Run Analyze'}
+            label={confidenceLine}
             size="small"
             sx={{
               mt: 1,
@@ -358,12 +612,6 @@ export default function Features({
               height: 24,
               borderRadius: 999,
               px: 1.5,
-              ...(!pred &&
-                !predictUi.loading && {
-                  bgcolor: 'action.hover',
-                  borderColor: 'divider',
-                  color: 'text.secondary',
-                }),
             }}
           />
         ) : null}
@@ -400,6 +648,203 @@ export default function Features({
         </Typography>
       </Box>
     </Box>
+
+    {/* Anomaly flag (opt-in note from the clinician for the image on screen) */}
+    {pred && currentFlagKey ? (
+      <Box>
+        {currentFlag ? (
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', rowGap: 1 }}>
+            <FlagOutlinedIcon fontSize="small" sx={{ color: 'warning.main' }} />
+            {currentFlag.categories.map((c) => (
+              <Chip
+                key={c}
+                label={categoryLabel(c)}
+                size="small"
+                sx={{
+                  bgcolor: 'rgba(245, 158, 11, 0.14)',
+                  border: '1px solid rgba(245, 158, 11, 0.55)',
+                  color: 'warning.main',
+                  borderRadius: 999,
+                  fontSize: 11,
+                  height: 24,
+                }}
+              />
+            ))}
+            <Button size="small" variant="text" onClick={openFlagForm}>
+              {flagFormOpen ? 'Close' : 'Edit note'}
+            </Button>
+            <Button
+              size="small"
+              variant="text"
+              color="error"
+              onClick={() => removeFlag(currentFlagKey)}
+            >
+              Remove
+            </Button>
+          </Stack>
+        ) : (
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<FlagOutlinedIcon fontSize="small" />}
+            onClick={openFlagForm}
+          >
+            {flagFormOpen ? 'Cancel' : 'Flag anomaly'}
+          </Button>
+        )}
+
+        <Collapse in={flagFormOpen} unmountOnExit>
+          <Box
+            sx={(theme) => ({
+              mt: 1.5,
+              p: 2,
+              borderRadius: 2,
+              border: '1px solid',
+              borderColor: 'rgba(148, 163, 184, 0.35)',
+              bgcolor: 'rgba(255, 255, 255, 0.55)',
+              backdropFilter: 'blur(10px)',
+              WebkitBackdropFilter: 'blur(10px)',
+              ...theme.applyStyles('dark', {
+                bgcolor: 'rgba(30, 41, 59, 0.55)',
+                borderColor: 'rgba(148, 163, 184, 0.22)',
+              }),
+            })}
+          >
+            <Typography
+              variant="caption"
+              sx={{ color: mutedText, display: 'block', mb: 1 }}
+            >
+              Note an anomaly
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mb: 1.5 }}>
+              {FLAG_CATEGORIES.map((c) => {
+                const active = flagFormCategories.includes(c.id);
+                return (
+                  <Chip
+                    key={c.id}
+                    label={c.label}
+                    size="small"
+                    clickable
+                    /** Use outlined for unselected so MUI's filled-default bg
+                     *  doesn't override our transparent background. */
+                    variant={active ? 'filled' : 'outlined'}
+                    onClick={() => toggleFormCategory(c.id)}
+                    aria-pressed={active}
+                    /**
+                     * The shared theme's `MuiChip` variant for `color: 'default'`
+                     * paints filled chips with `gray[800]` bg + `gray[300]` label
+                     * color in dark mode (and a light gray version in light mode).
+                     * That variant generates `.MuiChip-root.MuiChip-colorDefault`
+                     * selectors which match this Chip and tie the specificity of
+                     * a plain `sx` override — meaning the theme can win on
+                     * source order, especially once focus shifts away from the
+                     * chip and re-triggers its resting state.
+                     *
+                     * We bump specificity by anchoring rules to `&.MuiChip-root`
+                     * (and `&.MuiChip-root .MuiChip-label`) so the selected
+                     * white-on-dark / dark-on-white look HOLDS regardless of
+                     * focus, hover, or where the user clicks next.
+                     */
+                    sx={{
+                      borderRadius: 999,
+                      fontSize: 11,
+                      height: 24,
+                      transition:
+                        'background-color 120ms ease, color 120ms ease, border-color 120ms ease',
+                      ...(active
+                        ? {
+                            '&.MuiChip-root': {
+                              backgroundColor: 'text.primary',
+                              borderColor: 'text.primary',
+                              border: '1px solid',
+                            },
+                            '&.MuiChip-root .MuiChip-label': {
+                              color: 'background.default',
+                            },
+                            '&.MuiChip-root:hover, &.MuiChip-root:focus, &.MuiChip-root:focus-visible, &.MuiChip-root:active':
+                              {
+                                backgroundColor: 'text.primary',
+                                borderColor: 'text.primary',
+                                opacity: 1,
+                              },
+                          }
+                        : {
+                            '&.MuiChip-root': {
+                              backgroundColor: 'transparent',
+                              borderColor: 'divider',
+                              border: '1px solid',
+                            },
+                            '&.MuiChip-root .MuiChip-label': {
+                              color: 'text.primary',
+                            },
+                            '&.MuiChip-root:hover': {
+                              backgroundColor: 'action.hover',
+                              borderColor: 'divider',
+                            },
+                          }),
+                    }}
+                  />
+                );
+              })}
+            </Box>
+            <TextField
+              fullWidth
+              multiline
+              minRows={2}
+              maxRows={6}
+              placeholder="Note (e.g., missed nodule on right apex)"
+              value={flagFormNote}
+              onChange={(e) => setFlagFormNote(e.target.value)}
+              sx={{
+                // The shared theme pins MuiOutlinedInput's root to a fixed height
+                // for `size: small`, which squeezes the multiline textarea against
+                // the top edge. Override height + padding for breathing room.
+                '& .MuiOutlinedInput-root': {
+                  height: 'auto',
+                  py: 1.25,
+                  px: 1.5,
+                  alignItems: 'flex-start',
+                },
+                '& .MuiOutlinedInput-input': {
+                  padding: 0,
+                },
+              }}
+            />
+            <Stack direction="row" spacing={1} sx={{ mt: 1.5, justifyContent: 'flex-end' }}>
+              <Button size="small" onClick={() => setFlagFormOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                size="small"
+                variant="contained"
+                onClick={saveCurrentFlag}
+                disabled={flagFormCategories.length === 0}
+                sx={(theme) => ({
+                  // Keep the label visible when disabled — MUI's default disabled
+                  // styling fades both bg and text, which on dark mode reads as a
+                  // near-blank white tile. Use a clearly-disabled-but-readable look.
+                  '&.Mui-disabled': {
+                    opacity: 1,
+                    color: 'rgba(15, 23, 42, 0.55)',
+                    backgroundColor: 'rgba(148, 163, 184, 0.28)',
+                    backgroundImage: 'none',
+                    boxShadow: 'none',
+                    borderColor: 'rgba(148, 163, 184, 0.35)',
+                    ...theme.applyStyles('dark', {
+                      color: 'rgba(241, 245, 249, 0.7)',
+                      backgroundColor: 'rgba(148, 163, 184, 0.18)',
+                      borderColor: 'rgba(148, 163, 184, 0.28)',
+                    }),
+                  },
+                })}
+              >
+                {currentFlag ? 'Update note' : 'Save note'}
+              </Button>
+            </Stack>
+          </Box>
+        </Collapse>
+      </Box>
+    ) : null}
 
     {/* Bottom: contributions (pulled closer to 70%) */}
     <Box>
@@ -450,6 +895,7 @@ export default function Features({
             variant="outlined"
             sx={{
               flex: 1,
+              minWidth: 0,
               bgcolor: cardBg,
               borderColor: cardBorder,
               color: 'text.primary',
@@ -458,12 +904,20 @@ export default function Features({
           >
             <CardHeader
               title={
-                <Stack direction="row" alignItems="center" justifyContent="space-between">
-                  <Typography component="span" sx={{ fontSize: 14, fontWeight: 600 }}>
-                    Prediction Heatmap
+                <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+                  <Typography
+                    component="span"
+                    sx={{ fontSize: 14, fontWeight: 600, flexShrink: 0 }}
+                  >
+                    Prediction Heat Map
                   </Typography>
                   {hasBatch ? (
-                    <Stack direction="row" alignItems="center" spacing={0.5}>
+                    <Stack
+                      direction="row"
+                      alignItems="center"
+                      spacing={0.5}
+                      sx={{ flexShrink: 0 }}
+                    >
                       <IconButton
                         size="small"
                         disabled={!canGoPrev}
@@ -485,12 +939,18 @@ export default function Features({
               subheader="Highlighted TB-suspect regions"
               sx={{
                 pb: 1,
+                '& .MuiCardHeader-content': {
+                  minWidth: 0,
+                },
                 '& .MuiCardHeader-title': {
                   width: '100%',
                 },
                 '& .MuiCardHeader-subheader': {
                   color: mutedText,
                   fontSize: 12,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
                 },
               }}
             />
@@ -515,21 +975,99 @@ export default function Features({
                   }}
                 />
               ) : (
-                <Box
-                  aria-hidden
-                  sx={{
-                    borderRadius: 2,
-                    width: '100%',
-                    aspectRatio: '3 / 4',
-                    bgcolor: '#000',
-                    border: '1px solid',
-                    borderColor: cardBorder,
-                  }}
-                />
+                <Box aria-hidden sx={(theme) => liquidGlassImagePlaceholderSx(theme)} />
               )}
             </CardContent>
           </Card>
         </Box>
+        <Dialog open={logOpen} onClose={() => setLogOpen(false)} fullWidth maxWidth="sm">
+          <DialogTitle>Anomaly log ({flagCount})</DialogTitle>
+          <DialogContent dividers>
+            {flagCount === 0 ? (
+              <Typography variant="body2" sx={{ color: mutedText }}>
+                No anomalies noted yet.
+              </Typography>
+            ) : (
+              <Stack spacing={1.5}>
+                {Object.entries(flags)
+                  .sort(([, a], [, b]) => (a.savedAt < b.savedAt ? 1 : -1))
+                  .map(([key, flag]) => (
+                    <Box
+                      key={key}
+                      sx={{
+                        p: 1.5,
+                        borderRadius: 1.5,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                      }}
+                    >
+                      <Stack
+                        direction="row"
+                        justifyContent="space-between"
+                        alignItems="flex-start"
+                        sx={{ mb: 0.75 }}
+                      >
+                        <Box sx={{ minWidth: 0, pr: 1 }}>
+                          <Typography
+                            variant="body2"
+                            sx={{ fontWeight: 600, wordBreak: 'break-word' }}
+                          >
+                            {flag.snapshot.fileName}
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            sx={{ color: mutedText, display: 'block' }}
+                          >
+                            Model: {flag.snapshot.diagnosis || '—'}
+                            {flag.snapshot.riskScore != null ? ` • ${flag.snapshot.riskScore}%` : ''}
+                            {flag.snapshot.confidence ? ` • ${flag.snapshot.confidence}` : ''}
+                          </Typography>
+                        </Box>
+                        <IconButton
+                          size="small"
+                          aria-label="Delete note"
+                          onClick={() => removeFlag(key)}
+                        >
+                          <DeleteOutlineIcon fontSize="small" />
+                        </IconButton>
+                      </Stack>
+                      <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', rowGap: 0.5 }}>
+                        {flag.categories.map((c) => (
+                          <Chip
+                            key={c}
+                            label={categoryLabel(c)}
+                            size="small"
+                            sx={{
+                              bgcolor: 'rgba(245, 158, 11, 0.14)',
+                              border: '1px solid rgba(245, 158, 11, 0.55)',
+                              color: 'warning.main',
+                              borderRadius: 999,
+                              fontSize: 11,
+                              height: 22,
+                            }}
+                          />
+                        ))}
+                      </Stack>
+                      {flag.note ? (
+                        <Typography variant="body2" sx={{ mt: 0.75, whiteSpace: 'pre-wrap' }}>
+                          {flag.note}
+                        </Typography>
+                      ) : null}
+                      <Typography
+                        variant="caption"
+                        sx={{ color: mutedText, display: 'block', mt: 0.75 }}
+                      >
+                        {new Date(flag.savedAt).toLocaleString()}
+                      </Typography>
+                    </Box>
+                  ))}
+              </Stack>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setLogOpen(false)}>Close</Button>
+          </DialogActions>
+        </Dialog>
         {hasBatch ? (
           <Stack direction="row" justifyContent="center" spacing={0.75} sx={{ mt: 2 }}>
             {predictUi.items.map((item, idx) => {

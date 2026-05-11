@@ -6,6 +6,7 @@ import Typography from '@mui/material/Typography';
 // Import templates
 import SignInSide from './sign-in-side/SignInSide';
 import MarketingPage from './marketing-page/MarketingPage';
+import AboutPage from './about/AboutPage';
 
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -50,6 +51,7 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/dashboard" element={<MarketingPage />} />
+          <Route path="/about" element={<AboutPage />} />
           <Route path="/" element={<SignInSide />} />
         </Routes>
       </BrowserRouter>

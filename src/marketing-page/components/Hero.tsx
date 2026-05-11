@@ -38,12 +38,22 @@ export default function Hero({
   const [progressValue, setProgressValue] = React.useState<number>(0);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const previousItemsRef = React.useRef<PredictUiState['items']>([]);
+  /** Blob URL used for the instant dashboard preview after Browse, before Analyze owns the URL. */
+  const browsePreviewUrlRef = React.useRef<string | null>(null);
+
+  const releaseBrowsePreviewUrl = React.useCallback(() => {
+    if (browsePreviewUrlRef.current) {
+      URL.revokeObjectURL(browsePreviewUrlRef.current);
+      browsePreviewUrlRef.current = null;
+    }
+  }, []);
 
   React.useEffect(
     () => () => {
+      releaseBrowsePreviewUrl();
       releaseBatchPreviewUrls(previousItemsRef.current);
     },
-    [],
+    [releaseBrowsePreviewUrl],
   );
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -83,7 +93,22 @@ export default function Hero({
     setProgressValue(0);
     releaseBatchPreviewUrls(previousItemsRef.current);
     previousItemsRef.current = [];
-    onLocalPreviewChange?.(null);
+    /**
+     * Show the picked image in the dashboard immediately. DICOMs can't be rendered
+     * by <img>, so we only build a blob URL for the first non-DICOM file; otherwise
+     * the placeholder stays until Analyze produces a server-side preview.
+     */
+    releaseBrowsePreviewUrl();
+    const firstPreviewable = files.find((file) => {
+      const isDicom =
+        file.type === 'application/dicom' ||
+        file.type === 'application/octet-stream' ||
+        /\.(dcm|dicom)$/i.test(file.name);
+      return !isDicom;
+    });
+    const nextPreviewUrl = firstPreviewable ? URL.createObjectURL(firstPreviewable) : null;
+    browsePreviewUrlRef.current = nextPreviewUrl;
+    onLocalPreviewChange?.(nextPreviewUrl);
     onPredictUiChange?.({ loading: false, error: null, data: null, items: [], currentIndex: 0 });
   };
 
@@ -111,12 +136,17 @@ export default function Hero({
     onPredictUiChange?.({ loading: true, error: null, data: null, items: [], currentIndex: 0 });
     try {
       releaseBatchPreviewUrls(previousItemsRef.current);
+      /** The batch's per-item blob URLs replace the browse preview synchronously below. */
+      releaseBrowsePreviewUrl();
       const finalItems = await predictImagesSequential(selectedFiles, (nextItems, currentIndex) => {
         previousItemsRef.current = nextItems;
         const doneCount = nextItems.filter((item) => item.status === 'done' || item.status === 'error').length;
         const pct = Math.round((doneCount / Math.max(nextItems.length, 1)) * 100);
         setProgressValue(pct);
-        setProgressText(`Processing image ${Math.min(currentIndex + 1, nextItems.length)} of ${nextItems.length}`);
+        const processingIdx = nextItems.findIndex((item) => item.status === 'processing');
+        const processingPos =
+          processingIdx >= 0 ? processingIdx + 1 : Math.min(doneCount + 1, nextItems.length);
+        setProgressText(`Processing image ${processingPos} of ${nextItems.length}`);
         const selected = nextItems[currentIndex]?.result ?? null;
         onLocalPreviewChange?.(nextItems[currentIndex]?.localPreviewUrl ?? null);
         onPredictUiChange?.({
@@ -159,6 +189,7 @@ export default function Hero({
       const uploaded = await uploadImage(selectedFile);
       onUploadComplete?.(uploaded.downloadURL);
       setUploadSuccess(true);
+      releaseBrowsePreviewUrl();
       onLocalPreviewChange?.(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Upload failed';

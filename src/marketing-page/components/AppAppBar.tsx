@@ -11,6 +11,7 @@ import MenuItem from '@mui/material/MenuItem';
 import Drawer from '@mui/material/Drawer';
 import MenuIcon from '@mui/icons-material/Menu';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
+import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import ColorModeIconDropdown from '../../../shared-theme/ColorModeIconDropdown';
 import Sitemark from './SitemarkIcon';
 
@@ -30,12 +31,85 @@ const StyledToolbar = styled(Toolbar)(({ theme }) => ({
   padding: '8px 12px',
 }));
 
+/** Pretty top-nav link: refined type, subtle hover pill, active-state highlight. */
+function NavLink({
+  to,
+  active,
+  children,
+}: {
+  to: string;
+  active: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Button
+      component={RouterLink}
+      to={to}
+      disableRipple
+      sx={(theme) => ({
+        position: 'relative',
+        px: 1.5,
+        py: 0.5,
+        minWidth: 0,
+        borderRadius: 999,
+        fontSize: '0.875rem',
+        fontWeight: active ? 600 : 500,
+        lineHeight: 1.4,
+        letterSpacing: '0.01em',
+        textTransform: 'none',
+        color: active ? 'text.primary' : 'text.secondary',
+        backgroundColor: 'transparent',
+        transition:
+          'color 120ms ease, background-color 120ms ease, transform 120ms ease',
+        '&:hover': {
+          color: 'text.primary',
+          backgroundColor: alpha(theme.palette.text.primary, 0.06),
+        },
+        '&:active': {
+          transform: 'scale(0.98)',
+        },
+        ...(active && {
+          '&::after': {
+            content: '""',
+            position: 'absolute',
+            left: '50%',
+            bottom: 2,
+            transform: 'translateX(-50%)',
+            width: 16,
+            height: 2,
+            borderRadius: 2,
+            backgroundColor: 'primary.main',
+            ...theme.applyStyles('dark', {
+              backgroundColor: theme.palette.primary.light,
+            }),
+          },
+        }),
+      })}
+    >
+      {children}
+    </Button>
+  );
+}
+
 export default function AppAppBar() {
   const [open, setOpen] = React.useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const currentPath = location.pathname;
 
   const toggleDrawer = (newOpen: boolean) => () => {
     setOpen(newOpen);
   };
+
+  const goTo = (path: string) => () => {
+    setOpen(false);
+    navigate(path);
+  };
+
+  const navItems = [
+    { label: 'Diagnosis Dashboard', to: '/dashboard' },
+    { label: 'About us', to: '/about' },
+  ];
 
   return (
     <AppBar
@@ -52,10 +126,25 @@ export default function AppAppBar() {
         <StyledToolbar variant="dense" disableGutters>
           <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', px: 0 }}>
             <Sitemark />
-            <Box sx={{ display: { xs: 'none', md: 'flex' } }}>
-              <Button variant="text" color="info" size="small">
-                Diagnosis Dashboard
-              </Button>
+            <Box
+              component="nav"
+              aria-label="Primary"
+              sx={{
+                display: { xs: 'none', md: 'flex' },
+                alignItems: 'center',
+                gap: 0.25,
+                ml: 1.5,
+              }}
+            >
+              {navItems.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  active={currentPath === item.to}
+                >
+                  {item.label}
+                </NavLink>
+              ))}
             </Box>
           </Box>
           <Box
@@ -94,7 +183,26 @@ export default function AppAppBar() {
                   </IconButton>
                 </Box>
 
-                <MenuItem>Diagnosis Dashboard</MenuItem>
+                {navItems.map((item) => {
+                  const active = currentPath === item.to;
+                  return (
+                    <MenuItem
+                      key={item.to}
+                      onClick={goTo(item.to)}
+                      selected={active}
+                      sx={{
+                        borderRadius: 1.5,
+                        my: 0.25,
+                        py: 1,
+                        fontSize: '0.95rem',
+                        fontWeight: active ? 600 : 500,
+                        color: active ? 'text.primary' : 'text.secondary',
+                      }}
+                    >
+                      {item.label}
+                    </MenuItem>
+                  );
+                })}
                 <Divider sx={{ my: 3 }} />
                 <MenuItem>
                   <ColorModeIconDropdown size="medium" />

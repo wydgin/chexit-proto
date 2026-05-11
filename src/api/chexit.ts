@@ -349,10 +349,14 @@ export async function predictImagesSequential(
   onItemUpdate: (nextItems: BatchPredictItem[], currentIndex: number) => void,
 ): Promise<BatchPredictItem[]> {
   const items = createBatchItems(files);
-  onItemUpdate([...items], 0);
+  // `viewIndex` tracks which image the dashboard should show. It only advances
+  // when an image finishes — kicking off the *next* image's analysis must not
+  // yank the view forward, so users can inspect the just-completed result.
+  let viewIndex = 0;
+  onItemUpdate([...items], viewIndex);
   for (let i = 0; i < files.length; i += 1) {
     items[i] = { ...items[i], status: 'processing', error: null };
-    onItemUpdate([...items], i);
+    onItemUpdate([...items], viewIndex);
     try {
       const result = await predictImage(files[i]);
       items[i] = { ...items[i], status: 'done', result, error: null };
@@ -360,7 +364,8 @@ export async function predictImagesSequential(
       const message = err instanceof Error ? err.message : 'Analyze failed';
       items[i] = { ...items[i], status: 'error', result: null, error: message };
     }
-    onItemUpdate([...items], i);
+    viewIndex = i;
+    onItemUpdate([...items], viewIndex);
   }
   return items;
 }
