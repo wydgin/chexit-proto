@@ -138,6 +138,8 @@ async def _lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Chexit API", version="0.2.0", lifespan=_lifespan)
+# StaticFiles requires the directory to exist at mount time; lifespan runs later.
+_ensure_upload_dirs()
 app.mount("/uploads/files", StaticFiles(directory=str(_UPLOADS_FILES_DIR)), name="uploads-files")
 
 app.add_middleware(
